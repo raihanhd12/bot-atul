@@ -2,23 +2,25 @@
 
 Self-hosted Telegram issue-management bot for private support teams.
 
-Approved users report issues through the bot's direct messages. The bot posts
-ticket cards in one private Telegram dashboard topic, gives assigned agents a
-private DM workspace, relays conversation privately, tracks ticket status,
-publishes a weekday action dashboard, and exports issue data to Excel.
+Approved agents and admins report issues through the bot's direct messages. The
+bot posts view-only ticket cards in one private Telegram dashboard topic,
+auto-assigns each report to the submitter, opens a private DM workspace, tracks
+ticket status, publishes a weekday action dashboard, and exports issue data to
+Excel.
 
 ## Features
 
-- Allowlisted reporters, agents, and admins using numeric Telegram user IDs
+- Allowlisted agents and admins using numeric Telegram user IDs
 - Guided private-message intake
 - Customizable service categories
 - Low, Normal, High, and Critical urgency
 - Multi-message descriptions without silent truncation
 - Photo and document attachments
-- One shared team dashboard topic with private agent workspaces
+- One shared team dashboard topic (view-only) with private agent workspaces
+- Auto-assignment on report (no group Assign to Me step)
 - Safe two-way message relay
-- Assignment and status controls
-- Reporter confirmation when an issue is marked Fixed
+- Status controls in the private ticket workspace
+- Submitter confirmation when an issue is marked Fixed
 - Monday-to-Friday issue dashboard at 09:00 in the configured timezone
 - Admin-only `.xlsx` export with date filtering
 - Durable failed-message records and retry buttons
@@ -33,12 +35,13 @@ Open -> In Progress -> Fixed -> Closed
   +--------- Reopen --------+
 ```
 
-When an agent marks a ticket Fixed, the reporter receives:
+When a ticket is marked Fixed, the original submitter receives:
 
 - **Yes, fixed** — closes the ticket
 - **No, still broken** — reopens the ticket
 
-A reporter may cancel only an Open, unassigned ticket.
+An owner may cancel an Open ticket assigned to themselves. Admins may cancel any
+Open ticket.
 
 ## Project Structure
 
@@ -103,7 +106,7 @@ For local development without Docker:
    - initial admin Telegram user ID.
 
 The bot cannot initiate a private conversation with a user who has never
-started it. Each reporter must open the bot and press **Start** first.
+started it. Each agent or admin must open the bot and press **Start** first.
 
 ## Environment Configuration
 
@@ -197,7 +200,7 @@ The bot uses Telegram long polling, so no inbound public HTTP port is required.
 Only allowlisted admins can use these commands:
 
 ```text
-/user_add <telegram_id> <reporter|agent|admin>
+/user_add <telegram_id> <agent|admin>
 /user_disable <telegram_id>
 /service_add <name>
 /service_rename <old> <new>
@@ -211,8 +214,8 @@ Only allowlisted admins can use these commands:
 Examples:
 
 ```text
-/user_add 123456789 reporter
-/user_add 987654321 agent
+/user_add 123456789 agent
+/user_add 987654321 admin
 /service_move Technical 1
 /export 2026-07-01 2026-07-31
 ```
@@ -238,7 +241,6 @@ The Admin Panel shows:
 
 - the active service list in its current order;
 - current admins and agents;
-- current reporters;
 - the configured weekday reminder time;
 - shortcuts for service and user management commands.
 
@@ -248,18 +250,17 @@ from the buttons.
 
 Roles are hierarchical:
 
-- **Reporter** — submits issues
 - **Agent** — submits and handles issues
 - **Admin** — submits, handles, manages users/categories, and exports
 
 The bot registers its slash-command list automatically during startup, so
 manual BotFather command-menu configuration is optional.
 
-## Reporter Flow
+## Report Flow
 
-1. The admin allowlists the reporter's numeric Telegram ID.
-2. The reporter opens the bot and presses **Start**.
-3. The reporter sends `/new`.
+1. The admin allowlists the agent's numeric Telegram ID.
+2. The agent opens the bot and presses **Start**.
+3. The agent sends `/new` or taps **Report Issue**.
 4. The bot asks for:
    - title;
    - service;
@@ -267,23 +268,23 @@ manual BotFather command-menu configuration is optional.
    - description;
    - optional attachments;
    - final confirmation.
-5. The bot posts a card in the dashboard topic and sends the ticket number.
+5. The bot posts a view-only card in the dashboard topic, auto-assigns the
+   ticket to the submitter, and opens a private workspace.
 6. Further private messages are routed to the active ticket.
-7. If the reporter has several active tickets, the bot asks which ticket should
+7. If the agent has several active tickets, the bot asks which ticket should
    receive the message.
 
 ## Team Flow
 
-Each ticket appears as a card in the shared dashboard topic.
+Each ticket appears as a view-only card in the shared dashboard topic. No assign
+or close buttons appear in the group.
 
-Team members can:
+After reporting, the submitter receives a private ticket workspace and can:
 
-- assign the ticket to themselves;
-- receive a private ticket workspace from the bot;
 - start work, mark it Fixed, close, or reopen it from that workspace;
 - use **Reply to Reporter** to send a private response.
 
-Reporter messages and team responses are never posted in the dashboard topic.
+Ticket conversation is never posted in the dashboard topic.
 
 ## Daily Dashboard
 

@@ -12,7 +12,7 @@ from bot_atul.db.repositories import Repository
 from bot_atul.domain.permissions import Action, Role, allowed
 from bot_atul.services.dashboard import safe_publish_dashboard
 from bot_atul.services.tickets import IntakeSession, IntakeStep
-from bot_atul.services.topics import create_ticket_card
+from bot_atul.services.topics import create_agent_workspace, create_ticket_card
 from bot_atul.telegram.keyboards import (
     action,
     choices,
@@ -153,6 +153,20 @@ def build_intake_router(
                         show_alert=True,
                     )
                     return
+                workspace_note = ""
+                try:
+                    await create_agent_workspace(
+                        bot, repository, ticket, ticket.reporter_id
+                    )
+                except TelegramAPIError:
+                    LOGGER.exception(
+                        "Could not open private workspace for ticket %s",
+                        ticket.number,
+                    )
+                    workspace_note = (
+                        "\n\nOpen this bot privately and press Start if you do "
+                        "not see the ticket workspace yet."
+                    )
                 await safe_publish_dashboard(
                     bot,
                     repository,
@@ -164,7 +178,8 @@ def build_intake_router(
                 SESSIONS.pop(query.from_user.id, None)
                 await _edit(
                     query,
-                    f"Ticket #{ticket.number} submitted successfully.",
+                    f"Ticket #{ticket.number} submitted successfully."
+                    f"{workspace_note}",
                     reporter_ticket_actions(ticket),
                 )
             elif data == "intake:cancel":

@@ -204,7 +204,7 @@ class Repository:
         return True
 
     def upsert_user(self, telegram_id: int, role: str) -> None:
-        if role not in {"reporter", "agent", "admin"}:
+        if role not in {"agent", "admin"}:
             raise ValueError(f"Invalid role: {role}")
         with self.connection:
             self.connection.execute(

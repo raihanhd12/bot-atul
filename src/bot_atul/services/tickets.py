@@ -94,7 +94,7 @@ class IntakeSession:
         if self.step is not IntakeStep.REVIEW:
             raise ValueError("The intake is not ready for confirmation.")
         if self._ticket is None:
-            self._ticket = repository.create_ticket(
+            ticket = repository.create_ticket(
                 reporter_id=self.reporter_id,
                 service_name=self.service,
                 urgency=self.urgency,
@@ -104,6 +104,11 @@ class IntakeSession:
                     (item.kind, item.file_id, item.file_name, item.caption)
                     for item in self.attachments
                 ),
+            )
+            # Report only: auto-assign to the submitter so the group never needs
+            # an "Assign to Me" step.
+            self._ticket = repository.assign_ticket(
+                ticket.number, self.reporter_id, self.reporter_id
             )
         return self._ticket
 

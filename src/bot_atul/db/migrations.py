@@ -3,7 +3,7 @@ import sqlite3
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
-    role TEXT NOT NULL CHECK (role IN ('reporter', 'agent', 'admin')),
+    role TEXT NOT NULL CHECK (role IN ('agent', 'admin')),
     username TEXT,
     display_name TEXT,
     enabled INTEGER NOT NULL DEFAULT 1,
@@ -132,4 +132,23 @@ def migrate(connection: sqlite3.Connection) -> None:
         "INSERT OR IGNORE INTO services(name, position) VALUES (?, ?)",
         ((name, position) for position, name in enumerate(SERVICES)),
     )
+    _migrate_legacy_reporter_roles(connection)
     connection.commit()
+
+
+def _migrate_legacy_reporter_roles(connection: sqlite3.Connection) -> None:
+    """Promote legacy reporter users to agents.
+
+    Existing databases may still carry an older CHECK that mentions
+    ``reporter``. Application code rejects new reporter roles, and new
+    installs use the tighter schema above.
+    """
+    tables = {
+        str(row[0])
+        for row in connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        )
+    }
+    if "users" not in tables:
+        return
+    connection.execute("UPDATE users SET role = 'agent' WHERE role = 'reporter'")

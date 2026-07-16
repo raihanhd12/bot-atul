@@ -28,9 +28,9 @@ def review_actions() -> InlineKeyboardMarkup:
 
 
 def dashboard_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
-    if ticket.assignee_id is not None or ticket.status not in {"Open", "In Progress"}:
-        return None
-    return action("Assign to Me", f"ticket:assign:{ticket.number}")
+    """Dashboard topic cards are view-only; no group actions."""
+    del ticket
+    return None
 
 
 def agent_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup:
@@ -84,7 +84,7 @@ def fix_confirmation(ticket_number: int) -> InlineKeyboardMarkup:
 
 def reporter_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
     rows = []
-    if ticket.status == "Open" and ticket.assignee_id is None:
+    if ticket.status == "Open" and ticket.assignee_id in {None, ticket.reporter_id}:
         rows.append(
             [
                 InlineKeyboardButton(

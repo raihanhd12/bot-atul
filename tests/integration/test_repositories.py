@@ -11,7 +11,7 @@ from bot_atul.db.repositories import Repository
 def repository(tmp_path: Path) -> Repository:
     connection = connect(tmp_path / "bot.db")
     migrate(connection)
-    connection.execute("INSERT INTO users(telegram_id, role) VALUES (10, 'reporter')")
+    connection.execute("INSERT INTO users(telegram_id, role) VALUES (10, 'agent')")
     connection.commit()
     return Repository(connection)
 

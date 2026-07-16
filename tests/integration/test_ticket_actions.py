@@ -14,7 +14,7 @@ def workflow() -> tuple[Repository, TicketWorkflow, int]:
     connection.execute("PRAGMA foreign_keys = ON")
     migrate(connection)
     repository = Repository(connection)
-    repository.upsert_user(10, "reporter")
+    repository.upsert_user(10, "agent")
     repository.upsert_user(20, "agent")
     repository.upsert_user(30, "admin")
     ticket = repository.create_ticket(
@@ -40,7 +40,7 @@ def test_agent_assigns_and_resolves_ticket(
     assert repository.count_status_history(number) == 3
 
 
-def test_reporter_can_reject_fix(
+def test_owner_can_reject_fix(
     workflow: tuple[Repository, TicketWorkflow, int],
 ) -> None:
     _, service, number = workflow
@@ -76,29 +76,41 @@ def test_unassigned_agent_cannot_update_ticket(
         service.change_status(number, 21, "start")
 
 
-def test_reporter_cancels_only_open_unassigned_ticket(
+def test_owner_cancels_open_self_assigned_ticket(
     workflow: tuple[Repository, TicketWorkflow, int],
 ) -> None:
-    _, service, number = workflow
+    repository, service, number = workflow
+    repository.assign_ticket(number, 10, 10)
 
     cancelled = service.cancel(number, 10)
     assert cancelled.status == "Closed"
 
 
-def test_assigned_ticket_cannot_be_cancelled(
+def test_owner_cannot_cancel_ticket_assigned_to_someone_else(
     workflow: tuple[Repository, TicketWorkflow, int],
 ) -> None:
     _, service, number = workflow
     service.assign_to_me(number, 20)
 
-    with pytest.raises(ValueError, match="unassigned"):
+    with pytest.raises(ValueError, match="assigned owner"):
         service.cancel(number, 10)
+
+
+def test_admin_can_cancel_open_ticket(
+    workflow: tuple[Repository, TicketWorkflow, int],
+) -> None:
+    _, service, number = workflow
+    service.assign_to_me(number, 20)
+
+    cancelled = service.cancel(number, 30)
+    assert cancelled.status == "Closed"
 
 
 def test_closed_ticket_cannot_be_assigned(
     workflow: tuple[Repository, TicketWorkflow, int],
 ) -> None:
-    _, service, number = workflow
+    repository, service, number = workflow
+    repository.assign_ticket(number, 10, 10)
     service.cancel(number, 10)
 
     with pytest.raises(ValueError, match="active"):

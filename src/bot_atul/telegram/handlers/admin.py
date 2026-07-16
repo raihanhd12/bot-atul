@@ -90,7 +90,7 @@ def _success(repository: Repository, actor_id: int, command: str, response: str)
 
 def _usage(command: str) -> str:
     usages = {
-        "/user_add": "Usage: /user_add <telegram_id> <reporter|agent|admin>",
+        "/user_add": "Usage: /user_add <telegram_id> <agent|admin>",
         "/user_disable": "Usage: /user_disable <telegram_id>",
         "/service_add": "Usage: /service_add <name>",
         "/service_rename": "Usage: /service_rename <old> <new>",

@@ -29,7 +29,7 @@ def test_reminder_summarizes_unresolved_tickets() -> None:
     connection.row_factory = sqlite3.Row
     migrate(connection)
     repository = Repository(connection)
-    repository.upsert_user(10, "reporter")
+    repository.upsert_user(10, "agent")
     repository.create_ticket(
         reporter_id=10,
         service_name="Technical",

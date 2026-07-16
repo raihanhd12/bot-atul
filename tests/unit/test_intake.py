@@ -62,7 +62,10 @@ def test_description_is_required() -> None:
 
 def test_confirmation_can_retry_without_duplicate_ticket() -> None:
     repository = Mock()
-    repository.create_ticket.return_value = Mock()
+    ticket = Mock()
+    ticket.number = 7
+    repository.create_ticket.return_value = ticket
+    repository.assign_ticket.return_value = ticket
     session = IntakeSession(reporter_id=10, services=("AI-ML",))
     session.answer("Training failure")
     session.answer("AI-ML")
@@ -73,6 +76,8 @@ def test_confirmation_can_retry_without_duplicate_ticket() -> None:
 
     assert session.confirm(repository) is session.confirm(repository)
     assert repository.create_ticket.call_count == 1
+    assert repository.assign_ticket.call_count == 1
+    repository.assign_ticket.assert_called_once_with(7, 10, 10)
     assert session.step is IntakeStep.REVIEW
 
     session.complete()
@@ -81,7 +86,7 @@ def test_confirmation_can_retry_without_duplicate_ticket() -> None:
 
 async def test_title_message_reaches_intake_handler() -> None:
     repository = Mock()
-    repository.get_role.return_value = "reporter"
+    repository.get_role.return_value = "agent"
     repository.list_services.return_value = ["AI-ML"]
     begin_intake(repository, 99)
     router = build_intake_router(

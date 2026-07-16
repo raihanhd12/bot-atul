@@ -21,7 +21,7 @@ def test_dashboard_lists_only_actionable_tickets() -> None:
     connection.execute("PRAGMA foreign_keys = ON")
     migrate(connection)
     repository = Repository(connection)
-    repository.upsert_user(10, "reporter")
+    repository.upsert_user(10, "agent")
     repository.upsert_user(20, "agent")
     open_ticket = repository.create_ticket(
         reporter_id=10,
@@ -111,7 +111,7 @@ async def test_publish_creates_cards_for_existing_active_tickets() -> None:
     connection.row_factory = sqlite3.Row
     migrate(connection)
     repository = Repository(connection)
-    repository.upsert_user(10, "reporter")
+    repository.upsert_user(10, "agent")
     ticket = repository.create_ticket(
         reporter_id=10,
         service_name="General",

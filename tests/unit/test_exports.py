@@ -14,7 +14,7 @@ def test_export_has_four_sheets_and_lossless_long_description(tmp_path: Path) ->
     connection.execute("PRAGMA foreign_keys = ON")
     migrate(connection)
     repository = Repository(connection)
-    repository.upsert_user(10, "reporter")
+    repository.upsert_user(10, "agent")
     description = "🚀abc" * 10_000
     ticket = repository.create_ticket(
         reporter_id=10,

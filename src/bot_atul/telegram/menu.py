@@ -44,11 +44,8 @@ def admin_menu() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="👤 Reporters", callback_data="admin:reporters"
-                ),
-                InlineKeyboardButton(
                     text="⏰ Reminder", callback_data="admin:reminder"
-                ),
+                )
             ],
             [
                 InlineKeyboardButton(

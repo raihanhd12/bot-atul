@@ -6,7 +6,6 @@ from bot_atul.domain.permissions import Action, Role, allowed
 @pytest.mark.parametrize(
     ("role", "permitted"),
     [
-        (Role.REPORTER, {Action.SUBMIT}),
         (Role.AGENT, {Action.SUBMIT, Action.HANDLE}),
         (Role.ADMIN, {Action.SUBMIT, Action.HANDLE, Action.ADMIN}),
     ],

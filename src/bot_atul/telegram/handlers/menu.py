@@ -24,14 +24,17 @@ from bot_atul.telegram.menu import (
 
 HELP_TEXT = (
     "Create an issue with Report Issue. Use My Tickets to view your active "
-    "reports. The bot will notify you about replies and status changes."
+    "tickets. The bot opens a private workspace for you after submit and "
+    "notifies you about status changes."
 )
 TEAM_HELP_TEXT = (
-    "Assign a dashboard ticket to receive its private workspace. Use Reply to "
-    "Reporter and the status buttons from that private chat."
+    "Reporting auto-assigns the ticket to you and opens a private workspace. "
+    "The group dashboard topic is view-only. Use status buttons and Reply to "
+    "Reporter from your private ticket workspace. Admins can cancel or close "
+    "tickets as needed."
 )
 HINTS = {
-    "user_add": "/user_add <telegram_id> <reporter|agent|admin>",
+    "user_add": "/user_add <telegram_id> <agent|admin>",
     "user_disable": "/user_disable <telegram_id>",
 }
 
@@ -126,13 +129,6 @@ def build_menu_router(repository: Repository, reminder_time: time) -> Router:
                 query,
                 "👥 Team Members\n\n"
                 + _format_users(repository.list_users(("admin", "agent"))),
-                user_menu(),
-            )
-        elif action == "reporters":
-            await _edit(
-                query,
-                "👤 Reporters\n\n"
-                + _format_users(repository.list_users(("reporter",))),
                 user_menu(),
             )
         elif action == "reminder":

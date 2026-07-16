@@ -13,10 +13,6 @@ def labels(role: str) -> list[str]:
     return [button.text for row in main_menu(role).inline_keyboard for button in row]
 
 
-def test_reporter_menu() -> None:
-    assert labels("reporter") == ["📝 Report Issue", "📋 My Tickets", "❓ Help"]
-
-
 def test_agent_menu_includes_team_help() -> None:
     assert labels("agent") == [
         "📝 Report Issue",
@@ -69,9 +65,21 @@ def test_disable_requires_confirmation() -> None:
     ]
 
 
-def test_closed_ticket_has_no_dashboard_actions() -> None:
-    ticket = Ticket(
+def test_dashboard_cards_are_view_only() -> None:
+    open_ticket = Ticket(
         number=1,
+        reporter_id=10,
+        service_name="General",
+        urgency="Normal",
+        title="Open work",
+        description="Details",
+        status="Open",
+        topic_id=None,
+        card_message_id=None,
+        assignee_id=None,
+    )
+    closed_ticket = Ticket(
+        number=2,
         reporter_id=10,
         service_name="General",
         urgency="Normal",
@@ -83,7 +91,8 @@ def test_closed_ticket_has_no_dashboard_actions() -> None:
         assignee_id=None,
     )
 
-    assert dashboard_ticket_actions(ticket) is None
+    assert dashboard_ticket_actions(open_ticket) is None
+    assert dashboard_ticket_actions(closed_ticket) is None
 
 
 def _keyboard_labels(menu: object) -> list[str]:

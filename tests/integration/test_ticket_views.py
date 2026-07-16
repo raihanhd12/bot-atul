@@ -42,7 +42,7 @@ def repository() -> Repository:
     connection.execute("PRAGMA foreign_keys = ON")
     migrate(connection)
     repository = Repository(connection)
-    repository.upsert_user(10, "reporter")
+    repository.upsert_user(10, "agent")
     repository.upsert_user(20, "agent")
     return repository
 

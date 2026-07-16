@@ -21,9 +21,9 @@ def repository() -> Repository:
 
 
 def test_admin_can_manage_allowlist(repository: Repository) -> None:
-    result = execute_admin_command(repository, 1, "/user_add 10 reporter")
-    assert result == "User 10 saved as reporter."
-    assert repository.get_role(10) == "reporter"
+    result = execute_admin_command(repository, 1, "/user_add 10 agent")
+    assert result == "User 10 saved as agent."
+    assert repository.get_role(10) == "agent"
 
     assert (
         execute_admin_command(repository, 1, "/user_disable 10") == "User 10 disabled."
@@ -33,9 +33,7 @@ def test_admin_can_manage_allowlist(repository: Repository) -> None:
 
 
 def test_non_admin_is_rejected(repository: Repository) -> None:
-    assert (
-        execute_admin_command(repository, 2, "/user_add 10 reporter") == "Not allowed."
-    )
+    assert execute_admin_command(repository, 2, "/user_add 10 agent") == "Not allowed."
     assert repository.get_role(10) is None
 
 
@@ -58,8 +56,15 @@ def test_admin_can_manage_services(repository: Repository) -> None:
 
 def test_bad_admin_command_returns_usage(repository: Repository) -> None:
     assert execute_admin_command(repository, 1, "/user_add nope") == (
-        "Usage: /user_add <telegram_id> <reporter|agent|admin>"
+        "Usage: /user_add <telegram_id> <agent|admin>"
     )
+
+
+def test_reporter_role_is_rejected(repository: Repository) -> None:
+    assert execute_admin_command(repository, 1, "/user_add 10 reporter") == (
+        "Usage: /user_add <telegram_id> <agent|admin>"
+    )
+    assert repository.get_role(10) is None
 
 
 def test_interactive_service_names_can_contain_spaces(repository: Repository) -> None:

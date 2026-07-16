@@ -14,7 +14,7 @@ def relay() -> tuple[Repository, RelayService, int, int]:
     connection.execute("PRAGMA foreign_keys = ON")
     migrate(connection)
     repository = Repository(connection)
-    repository.upsert_user(10, "reporter")
+    repository.upsert_user(10, "agent")
     repository.upsert_user(20, "agent")
     first = repository.create_ticket(
         reporter_id=10,
