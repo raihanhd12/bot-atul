@@ -33,4 +33,14 @@ async def create_ticket_topic(
                 message_thread_id=topic_id,
                 text=f"Description ({index}/{len(chunks)})\n{chunk}",
             )
+        for kind, file_id, _file_name, caption in repository.list_attachments(
+            ticket.number
+        ):
+            method = bot.send_photo if kind == "photo" else bot.send_document
+            await method(
+                chat_id=team_group_id,
+                message_thread_id=topic_id,
+                **{kind: file_id},
+                caption=caption,
+            )
     return topic_id

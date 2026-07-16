@@ -12,6 +12,7 @@ class FakeBot:
     def __init__(self) -> None:
         self.topics = 0
         self.messages: list[dict[str, object]] = []
+        self.attachments: list[dict[str, object]] = []
 
     async def create_forum_topic(self, **kwargs: object) -> SimpleNamespace:
         self.topics += 1
@@ -20,6 +21,14 @@ class FakeBot:
     async def send_message(self, **kwargs: object) -> SimpleNamespace:
         self.messages.append(kwargs)
         return SimpleNamespace(message_id=len(self.messages))
+
+    async def send_document(self, **kwargs: object) -> SimpleNamespace:
+        self.attachments.append(kwargs)
+        return SimpleNamespace(message_id=100 + len(self.attachments))
+
+    async def send_photo(self, **kwargs: object) -> SimpleNamespace:
+        self.attachments.append(kwargs)
+        return SimpleNamespace(message_id=100 + len(self.attachments))
 
 
 @pytest.mark.asyncio
@@ -36,6 +45,7 @@ async def test_topic_creation_is_idempotent() -> None:
         urgency="High",
         title="Agent cannot start",
         description="x" * 8_500,
+        attachments=(("document", "file-1", "trace.txt", "log"),),
     )
     bot = FakeBot()
 
@@ -46,7 +56,9 @@ async def test_topic_creation_is_idempotent() -> None:
     assert stored.card_message_id == 1
     assert bot.topics == 1
     assert len(bot.messages) == 4
+    assert bot.attachments[0]["document"] == "file-1"
 
     await create_ticket_topic(bot, repository, -1001, stored)
     assert bot.topics == 1
     assert len(bot.messages) == 4
+    assert len(bot.attachments) == 1

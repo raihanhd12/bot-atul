@@ -101,6 +101,18 @@ class Repository:
                 (card_message_id, number),
             )
 
+    def list_attachments(
+        self, number: int
+    ) -> list[tuple[str, str, str | None, str | None]]:
+        rows = self.connection.execute(
+            """
+            SELECT kind, telegram_file_id, file_name, caption
+            FROM attachments WHERE ticket_number = ? ORDER BY id
+            """,
+            (number,),
+        ).fetchall()
+        return [(str(row[0]), str(row[1]), row[2], row[3]) for row in rows]
+
     def count_tickets(self) -> int:
         row = self.connection.execute("SELECT COUNT(*) FROM tickets").fetchone()
         return int(row[0])
