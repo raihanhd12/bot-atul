@@ -40,28 +40,52 @@ def execute_admin_command(repository: Repository, actor_id: int, command: str) -
         if name == "/user_add" and len(parts) == 3:
             telegram_id = int(parts[1])
             repository.upsert_user(telegram_id, parts[2])
-            return f"User {telegram_id} saved as {parts[2]}."
+            return _success(
+                repository,
+                actor_id,
+                command,
+                f"User {telegram_id} saved as {parts[2]}.",
+            )
         if name == "/user_disable" and len(parts) == 2:
             telegram_id = int(parts[1])
             repository.disable_user(telegram_id)
-            return f"User {telegram_id} disabled."
+            return _success(
+                repository, actor_id, command, f"User {telegram_id} disabled."
+            )
         if name == "/service_add" and len(parts) == 2:
             repository.add_service(parts[1])
-            return f"Service {parts[1]} added."
+            return _success(repository, actor_id, command, f"Service {parts[1]} added.")
         if name == "/service_rename" and len(parts) == 3:
             repository.rename_service(parts[1], parts[2])
-            return f"Service {parts[1]} renamed to {parts[2]}."
+            return _success(
+                repository,
+                actor_id,
+                command,
+                f"Service {parts[1]} renamed to {parts[2]}.",
+            )
         if name == "/service_disable" and len(parts) == 2:
             repository.disable_service(parts[1])
-            return f"Service {parts[1]} disabled."
+            return _success(
+                repository, actor_id, command, f"Service {parts[1]} disabled."
+            )
         if name == "/service_move" and len(parts) == 3:
             position = int(parts[2])
             repository.move_service(parts[1], position)
-            return f"Service {parts[1]} moved to position {position}."
+            return _success(
+                repository,
+                actor_id,
+                command,
+                f"Service {parts[1]} moved to position {position}.",
+            )
     except (ValueError, sqlite3.IntegrityError):
         pass
 
     return _usage(name)
+
+
+def _success(repository: Repository, actor_id: int, command: str, response: str) -> str:
+    repository.record_audit(actor_id, "admin_command", command)
+    return response
 
 
 def _usage(command: str) -> str:

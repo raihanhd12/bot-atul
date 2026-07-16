@@ -28,6 +28,7 @@ def test_admin_can_manage_allowlist(repository: Repository) -> None:
         execute_admin_command(repository, 1, "/user_disable 10") == "User 10 disabled."
     )
     assert repository.get_role(10) is None
+    assert repository.count_audit_events("admin_command") == 2
 
 
 def test_non_admin_is_rejected(repository: Repository) -> None:

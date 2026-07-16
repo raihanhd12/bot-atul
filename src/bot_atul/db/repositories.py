@@ -27,6 +27,7 @@ class Repository:
         urgency: str,
         title: str,
         description: str,
+        attachments: tuple[tuple[str, str, str | None, str | None], ...] = (),
     ) -> Ticket:
         service = self.connection.execute(
             "SELECT id, name FROM services WHERE name = ? AND enabled = 1",
@@ -51,7 +52,18 @@ class Repository:
                     description,
                 ),
             )
-        assert cursor.lastrowid is not None
+            assert cursor.lastrowid is not None
+            self.connection.executemany(
+                """
+                INSERT INTO attachments(
+                    ticket_number, kind, telegram_file_id, file_name, caption
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    (cursor.lastrowid, kind, file_id, file_name, caption)
+                    for kind, file_id, file_name, caption in attachments
+                ),
+            )
         ticket = self.get_ticket(cursor.lastrowid)
         assert ticket is not None
         return ticket
@@ -155,3 +167,19 @@ class Repository:
                 "UPDATE services SET position = ? WHERE id = ?", (position - 1, row[0])
             )
         return True
+
+    def record_audit(self, actor_id: int, event_type: str, details: str) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO audit_events(actor_id, event_type, details)
+                VALUES (?, ?, ?)
+                """,
+                (actor_id, event_type, details),
+            )
+
+    def count_audit_events(self, event_type: str) -> int:
+        row = self.connection.execute(
+            "SELECT COUNT(*) FROM audit_events WHERE event_type = ?", (event_type,)
+        ).fetchone()
+        return int(row[0])
