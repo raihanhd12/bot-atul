@@ -72,6 +72,12 @@ one guided question at a time:
 5. Optional photos or documents
 6. Review and confirmation
 
+The description step accepts multiple consecutive text messages. The reporter
+selects **Description Complete** when finished. The bot stores the combined
+UTF-8 text without shortening it. Telegram messages have a platform length
+limit, so a long description is displayed in the team topic as numbered,
+ordered messages rather than being truncated.
+
 Services initially available are:
 
 - AI-ML
@@ -161,18 +167,25 @@ from the detailed action list.
 
 Admins may run `/export` or use **Export Excel**. The bot supports all-time
 export and an optional inclusive date range based on ticket creation date in
-Asia/Jakarta time. It returns an `.xlsx` workbook with three worksheets:
+Asia/Jakarta time. It returns an `.xlsx` workbook with four worksheets:
 
 1. **Issues** — one filterable row per ticket with ticket number, created and
    updated timestamps, status, urgency, service, title, description, reporter,
-   assignee, age, resolved/closed timestamps, and clickable topic link.
+   assignee, age, resolved/closed timestamps, and clickable topic link. The
+   Description cell contains the complete text when it fits Excel's 32,767
+   character cell limit. For longer text, it identifies the ordered rows in
+   **Description Parts**; it never presents a shortened value as complete.
 2. **Summary** — totals grouped by status, service, and creation date.
 3. **Status History** — ticket number, previous status, new status, actor, and
    transition timestamp.
+4. **Description Parts** — ticket number, part number, and text chunks within
+   Excel's per-cell limit. Concatenating parts in numeric order reproduces the
+   entire stored description without lost characters.
 
-The export is generated from a consistent database snapshot. Message bodies
-and attachments are not included in Version 1 beyond the ticket's submitted
-description, minimizing unnecessary personal-data exposure.
+The export is generated from a consistent database snapshot. Description text
+is never silently truncated. Message bodies and attachments are not included
+in Version 1 beyond the ticket's submitted description, minimizing unnecessary
+personal-data exposure.
 
 ## Data Model
 
@@ -218,7 +231,8 @@ Automated tests cover:
 - Assignment and all valid and invalid status transitions
 - Fixed confirmation and reopening
 - Daily digest grouping, counts, links, and idempotent refresh
-- Excel worksheets, filters, timezone dates, links, and totals
+- Excel worksheets, filters, timezone dates, links, totals, and lossless
+  reconstruction of descriptions longer than one Excel cell
 - Delivery failure and retry behavior
 - Backup creation and restoration
 
@@ -250,7 +264,7 @@ The design is successfully implemented when:
    a proposed fix.
 5. The 09:00 Monday-through-Friday digest accurately lists all Open and In
    Progress tickets with working topic links and no duplicate daily post.
-6. An admin exports an accurate three-sheet workbook for all time or a chosen
-   date range.
+6. An admin exports an accurate four-sheet workbook for all time or a chosen
+   date range, with every submitted description preserved in full.
 7. Restarting the container preserves all state, and a tested backup restores
    open tickets and message routing data.
