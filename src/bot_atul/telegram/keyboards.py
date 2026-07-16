@@ -27,27 +27,38 @@ def review_actions() -> InlineKeyboardMarkup:
     )
 
 
-def ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup:
+def dashboard_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
+    if ticket.assignee_id is not None or ticket.status not in {"Open", "In Progress"}:
+        return None
+    return action("Assign to Me", f"ticket:assign:{ticket.number}")
+
+
+def agent_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup:
     actions: list[tuple[str, str]] = []
     if ticket.status == "Open":
         actions = [
-            ("Assign to Me", "assign"),
+            ("Reply to Reporter", "reply"),
             ("Start Work", "start"),
             ("Close", "close"),
         ]
     elif ticket.status == "In Progress":
         actions = [
-            ("Assign to Me", "assign"),
+            ("Reply to Reporter", "reply"),
             ("Mark Fixed", "fix"),
             ("Close", "close"),
         ]
     elif ticket.status in {"Fixed", "Closed"}:
-        actions = [("Reopen", "reopen")]
+        actions = [("Reply to Reporter", "reply"), ("Reopen", "reopen")]
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text=label, callback_data=f"ticket:{action}:{ticket.number}"
+                    text=label,
+                    callback_data=(
+                        f"relay:reply:{ticket.number}"
+                        if action == "reply"
+                        else f"ticket:{action}:{ticket.number}"
+                    ),
                 )
             ]
             for label, action in actions

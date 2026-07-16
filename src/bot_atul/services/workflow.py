@@ -13,6 +13,11 @@ class TicketWorkflow:
     def change_status(self, number: int, actor_id: int, action: str) -> Ticket:
         self._require_agent(actor_id)
         ticket = self._ticket(number)
+        if (
+            self.repository.get_role(actor_id) != "admin"
+            and ticket.assignee_id != actor_id
+        ):
+            raise PermissionError("Only the assigned agent can update this ticket.")
         new_status = transition(TicketStatus(ticket.status), action)
         return self.repository.update_status(
             number, ticket.status, new_status, actor_id

@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS assignments (
     assigned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS agent_workspaces (
+    ticket_number INTEGER PRIMARY KEY REFERENCES tickets(number),
+    agent_id INTEGER NOT NULL REFERENCES users(telegram_id),
+    message_id INTEGER NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS ticket_dashboard_cards (
+    ticket_number INTEGER PRIMARY KEY REFERENCES tickets(number),
+    message_id INTEGER NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS status_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticket_number INTEGER NOT NULL REFERENCES tickets(number),

@@ -23,9 +23,9 @@ def test_export_has_four_sheets_and_lossless_long_description(tmp_path: Path) ->
         title="Render failure",
         description=description,
     )
-    repository.attach_topic(ticket.number, 101)
+    repository.save_dashboard_card(ticket.number, 101)
 
-    path = export_tickets(repository, tmp_path / "issues.xlsx", -1001)
+    path = export_tickets(repository, tmp_path / "issues.xlsx", -1001, 24)
     workbook = load_workbook(path)
 
     assert workbook.sheetnames == [
@@ -45,3 +45,4 @@ def test_export_has_four_sheets_and_lossless_long_description(tmp_path: Path) ->
     )
     assert reconstructed == description
     assert issues["P2"].hyperlink is not None
+    assert issues["P2"].hyperlink.target == "https://t.me/c/1/24/101"

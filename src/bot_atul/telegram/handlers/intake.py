@@ -12,7 +12,7 @@ from bot_atul.db.repositories import Repository
 from bot_atul.domain.permissions import Action, Role, allowed
 from bot_atul.services.dashboard import safe_publish_dashboard
 from bot_atul.services.tickets import IntakeSession, IntakeStep
-from bot_atul.services.topics import create_ticket_topic
+from bot_atul.services.topics import create_ticket_card
 from bot_atul.telegram.keyboards import (
     action,
     choices,
@@ -136,7 +136,13 @@ def build_intake_router(
                 try:
                     await bot.get_chat(team_group_id)
                     ticket = session.confirm(repository)
-                    await create_ticket_topic(bot, repository, team_group_id, ticket)
+                    await create_ticket_card(
+                        bot,
+                        repository,
+                        team_group_id,
+                        dashboard_topic_id,
+                        ticket,
+                    )
                 except TelegramAPIError:
                     LOGGER.exception(
                         "Could not submit ticket to team group %s", team_group_id

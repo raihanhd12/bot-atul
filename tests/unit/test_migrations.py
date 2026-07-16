@@ -22,6 +22,8 @@ def test_migration_creates_schema_and_services() -> None:
         "ticket_messages",
         "attachments",
         "assignments",
+        "agent_workspaces",
+        "ticket_dashboard_cards",
         "status_history",
         "dashboard_posts",
         "processed_updates",

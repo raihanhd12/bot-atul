@@ -37,8 +37,8 @@ def test_dashboard_lists_only_actionable_tickets() -> None:
         title="Model drift",
         description="Details",
     )
-    repository.attach_topic(open_ticket.number, 101)
-    repository.attach_topic(working.number, 102)
+    repository.save_dashboard_card(open_ticket.number, 101)
+    repository.save_dashboard_card(working.number, 102)
     repository.assign_ticket(working.number, 20, 20)
     repository.update_status(working.number, "Open", "In Progress", 20)
 
@@ -46,6 +46,7 @@ def test_dashboard_lists_only_actionable_tickets() -> None:
         repository,
         datetime(2026, 7, 20, 9, tzinfo=ZoneInfo("Asia/Jakarta")),
         -1001,
+        24,
     )
 
     assert "Monday Issue Check" in text
@@ -54,7 +55,7 @@ def test_dashboard_lists_only_actionable_tickets() -> None:
     assert "🟡 In Progress (1)" in text
     assert "#1 Agent fails · High" in text
     assert "#2 Model drift · Normal · Agent 20" in text
-    assert "https://t.me/c/1/101" in text
+    assert "https://t.me/c/1/24/101" in text
 
 
 def test_next_run_skips_weekend() -> None:
@@ -102,3 +103,35 @@ async def test_publish_edits_same_daily_post() -> None:
 
     assert bot.sent == 1
     assert bot.edited == 1
+
+
+@pytest.mark.asyncio
+async def test_publish_creates_cards_for_existing_active_tickets() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    migrate(connection)
+    repository = Repository(connection)
+    repository.upsert_user(10, "reporter")
+    ticket = repository.create_ticket(
+        reporter_id=10,
+        service_name="General",
+        urgency="Normal",
+        title="Existing ticket",
+        description="Details",
+    )
+
+    class FakeBot:
+        def __init__(self) -> None:
+            self.messages: list[dict[str, object]] = []
+
+        async def send_message(self, **kwargs: object) -> SimpleNamespace:
+            self.messages.append(kwargs)
+            return SimpleNamespace(message_id=len(self.messages))
+
+    bot = FakeBot()
+    now = datetime(2026, 7, 20, 9, tzinfo=ZoneInfo("Asia/Jakarta"))
+
+    await publish_dashboard(bot, repository, -1001, 24, now)  # type: ignore[arg-type]
+
+    assert repository.get_dashboard_card(ticket.number) == 1
+    assert bot.messages[0]["message_thread_id"] == 24

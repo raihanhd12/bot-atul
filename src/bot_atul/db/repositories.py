@@ -40,6 +40,13 @@ class UserRecord:
     display_name: str | None
 
 
+@dataclass(frozen=True)
+class AgentWorkspace:
+    ticket_number: int
+    agent_id: int
+    message_id: int
+
+
 class Repository:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
@@ -123,6 +130,52 @@ class Repository:
                 """,
                 (card_message_id, number),
             )
+
+    def save_dashboard_card(self, number: int, message_id: int) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO ticket_dashboard_cards(ticket_number, message_id)
+                VALUES (?, ?)
+                ON CONFLICT(ticket_number) DO UPDATE SET
+                    message_id = excluded.message_id,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (number, message_id),
+            )
+
+    def get_dashboard_card(self, number: int) -> int | None:
+        row = self.connection.execute(
+            "SELECT message_id FROM ticket_dashboard_cards WHERE ticket_number = ?",
+            (number,),
+        ).fetchone()
+        return int(row[0]) if row else None
+
+    def save_agent_workspace(
+        self, number: int, agent_id: int, message_id: int
+    ) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO agent_workspaces(ticket_number, agent_id, message_id)
+                VALUES (?, ?, ?)
+                ON CONFLICT(ticket_number) DO UPDATE SET
+                    agent_id = excluded.agent_id,
+                    message_id = excluded.message_id,
+                    updated_at = CURRENT_TIMESTAMP
+                """,
+                (number, agent_id, message_id),
+            )
+
+    def get_agent_workspace(self, number: int) -> AgentWorkspace | None:
+        row = self.connection.execute(
+            """
+            SELECT ticket_number, agent_id, message_id
+            FROM agent_workspaces WHERE ticket_number = ?
+            """,
+            (number,),
+        ).fetchone()
+        return AgentWorkspace(**dict(row)) if row else None
 
     def list_attachments(
         self, number: int
@@ -284,6 +337,15 @@ class Repository:
         return int(row[0])
 
     def assign_ticket(self, number: int, agent_id: int, assigned_by: int) -> Ticket:
+        ticket = self.get_ticket(number)
+        if ticket is None:
+            raise ValueError(f"Unknown ticket: {number}")
+        if ticket.status not in {"Open", "In Progress"}:
+            raise ValueError("Only an active ticket can be assigned.")
+        if ticket.assignee_id is not None:
+            if ticket.assignee_id == agent_id:
+                return ticket
+            raise ValueError("Ticket is already assigned.")
         with self.connection:
             self.connection.execute(
                 """
@@ -299,10 +361,9 @@ class Repository:
                 """,
                 (number, agent_id, assigned_by),
             )
-        ticket = self.get_ticket(number)
-        if ticket is None:
-            raise ValueError(f"Unknown ticket: {number}")
-        return ticket
+        assigned = self.get_ticket(number)
+        assert assigned is not None
+        return assigned
 
     def update_status(
         self,
@@ -357,16 +418,17 @@ class Repository:
         ).fetchall()
         return [Ticket(**dict(row)) for row in rows]
 
-    def ticket_by_topic(self, topic_id: int) -> Ticket | None:
-        row = self.connection.execute(
+    def actionable_tickets(self) -> list[Ticket]:
+        rows = self.connection.execute(
             """
             SELECT number, reporter_id, service_name, urgency, title, description,
                    status, topic_id, card_message_id, assignee_id
-            FROM tickets WHERE topic_id = ?
-            """,
-            (topic_id,),
-        ).fetchone()
-        return Ticket(**dict(row)) if row else None
+            FROM tickets
+            WHERE status IN ('Open', 'In Progress')
+            ORDER BY number
+            """
+        ).fetchall()
+        return [Ticket(**dict(row)) for row in rows]
 
     def record_message(
         self,
@@ -437,17 +499,17 @@ class Repository:
                 (destination_chat_id, destination_message_id, message_id),
             )
 
-    def ticket_for_team_message(self, destination_message_id: int) -> Ticket | None:
-        row = self.connection.execute(
+    def pending_reporter_messages(self, number: int) -> list[RelayMessage]:
+        rows = self.connection.execute(
             """
-            SELECT t.number, t.reporter_id, t.service_name, t.urgency, t.title,
-                   t.description, t.status, t.topic_id, t.card_message_id,
-                   t.assignee_id
-            FROM ticket_messages m
-            JOIN tickets t ON t.number = m.ticket_number
-            WHERE m.direction = 'reporter_to_team'
-              AND m.destination_message_id = ?
+            SELECT id, ticket_number, direction, source_chat_id, source_message_id,
+                   destination_chat_id, destination_message_id, text,
+                   relay_method, delivery_status
+            FROM ticket_messages
+            WHERE ticket_number = ? AND direction = 'reporter_to_team'
+              AND delivery_status IN ('pending', 'failed')
+            ORDER BY id
             """,
-            (destination_message_id,),
-        ).fetchone()
-        return Ticket(**dict(row)) if row else None
+            (number,),
+        ).fetchall()
+        return [RelayMessage(**dict(row)) for row in rows]

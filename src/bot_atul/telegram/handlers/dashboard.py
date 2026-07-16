@@ -41,6 +41,7 @@ def build_dashboard_router(
             message.chat.id,
             repository,
             team_group_id,
+            dashboard_topic_id,
             data_dir,
             start,
             end,
@@ -69,6 +70,7 @@ def build_dashboard_router(
                 query.from_user.id,
                 repository,
                 team_group_id,
+                dashboard_topic_id,
                 data_dir,
                 None,
                 None,
@@ -96,12 +98,20 @@ async def _send_export(
     chat_id: int,
     repository: Repository,
     team_group_id: int,
+    dashboard_topic_id: int,
     data_dir: Path,
     start: date | None,
     end: date | None,
 ) -> None:
     path = data_dir / f"issues-{datetime.now().strftime('%Y%m%d-%H%M%S')}.xlsx"
-    export_tickets(repository, path, team_group_id, start, end)
+    export_tickets(
+        repository,
+        path,
+        team_group_id,
+        dashboard_topic_id,
+        start,
+        end,
+    )
     try:
         await bot.send_document(chat_id, FSInputFile(path), caption="Issue export")
     finally:

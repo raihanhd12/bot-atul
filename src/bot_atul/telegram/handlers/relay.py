@@ -18,6 +18,88 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
     router = Router(name="relay")
     service = RelayService(repository)
     pending: dict[int, int] = {}
+    pending_agent_replies: dict[int, int] = {}
+
+    @router.callback_query(F.data.startswith("relay:reply:"))
+    async def begin_agent_reply(query: CallbackQuery) -> None:
+        if query.data is None:
+            return
+        number = int(query.data.rsplit(":", 1)[1])
+        ticket = repository.get_ticket(number)
+        role = repository.get_role(query.from_user.id)
+        if ticket is None:
+            await query.answer("Ticket not found.", show_alert=True)
+            return
+        if role != "admin" and ticket.assignee_id != query.from_user.id:
+            await query.answer(
+                "Only the assigned agent can reply.", show_alert=True
+            )
+            return
+        pending_agent_replies[query.from_user.id] = number
+        await query.answer()
+        if isinstance(query.message, Message):
+            await query.message.answer(
+                f"Replying to ticket #{number}. Send the next message, photo, "
+                "or document."
+            )
+
+    @router.message(F.chat.type == "private")
+    async def agent_reply(message: Message) -> None:
+        if message.from_user is None:
+            raise SkipHandler
+        number = pending_agent_replies.get(message.from_user.id)
+        if number is None:
+            raise SkipHandler
+        ticket = repository.get_ticket(number)
+        role = repository.get_role(message.from_user.id)
+        if ticket is None or (
+            role != "admin" and ticket.assignee_id != message.from_user.id
+        ):
+            pending_agent_replies.pop(message.from_user.id, None)
+            await message.answer("That ticket reply is no longer available.")
+            return
+        bot = message.bot
+        if bot is None:
+            return
+        try:
+            await bot.send_message(
+                chat_id=ticket.reporter_id,
+                text=f"Reply for ticket #{ticket.number}:",
+            )
+            copied = await bot.copy_message(
+                chat_id=ticket.reporter_id,
+                from_chat_id=message.from_user.id,
+                message_id=message.message_id,
+            )
+        except TelegramAPIError:
+            pending_agent_replies.pop(message.from_user.id, None)
+            failed_id = repository.record_message(
+                ticket_number=ticket.number,
+                direction="team_to_reporter",
+                source_chat_id=message.from_user.id,
+                source_message_id=message.message_id,
+                destination_chat_id=ticket.reporter_id,
+                destination_message_id=None,
+                text=message.text or message.caption,
+                delivery_status="failed",
+            )
+            await message.answer(
+                "Delivery failed. Message saved.",
+                reply_markup=retry_delivery(failed_id),
+            )
+            return
+        pending_agent_replies.pop(message.from_user.id, None)
+        repository.record_message(
+            ticket_number=ticket.number,
+            direction="team_to_reporter",
+            source_chat_id=message.from_user.id,
+            source_message_id=message.message_id,
+            destination_chat_id=ticket.reporter_id,
+            destination_message_id=int(copied.message_id),
+            text=message.text or message.caption,
+            delivery_status="sent",
+        )
+        await message.answer(f"Sent to reporter for ticket #{number}.")
 
     @router.message(F.chat.type == "private")
     async def reporter_message(message: Message) -> None:
@@ -47,11 +129,15 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
             repository,
             message.from_user.id,
             message.message_id,
-            team_group_id,
             tickets[0],
             message.text or message.caption,
         )
-        if failed_id is None:
+        if tickets[0].assignee_id is None:
+            await message.answer(
+                f"Added to ticket #{tickets[0].number}. The assigned agent will "
+                "receive it."
+            )
+        elif failed_id is None:
             await message.answer(f"Added to ticket #{tickets[0].number}.")
         else:
             await message.answer(
@@ -77,19 +163,25 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
             repository,
             query.from_user.id,
             source_message_id,
-            team_group_id,
             ticket,
             None,
         )
+        pending_delivery = ticket.assignee_id is None
         await query.answer(
-            f"Added to ticket #{number}." if failed_id is None else "Delivery failed."
+            f"Added to ticket #{number}."
+            if failed_id is None or pending_delivery
+            else "Delivery failed."
         )
         if isinstance(query.message, Message):
             await query.message.edit_text(
                 f"Added to ticket #{number}."
-                if failed_id is None
+                if failed_id is None or pending_delivery
                 else "Delivery failed. Your message is saved.",
-                reply_markup=retry_delivery(failed_id) if failed_id else None,
+                reply_markup=(
+                    retry_delivery(failed_id)
+                    if failed_id is not None and not pending_delivery
+                    else None
+                ),
             )
 
     @router.callback_query(F.data.startswith("relay:retry:"))
@@ -110,28 +202,49 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
             relay_message.direction == "reporter_to_team"
             and ticket.reporter_id == query.from_user.id
         ) or (
-            relay_message.direction == "team_to_reporter" and role in {"agent", "admin"}
+            relay_message.direction == "team_to_reporter"
+            and (
+                role == "admin"
+                or (
+                    role == "agent"
+                    and ticket.assignee_id == query.from_user.id
+                )
+            )
         )
         if not allowed:
             await query.answer("Not allowed.", show_alert=True)
             return
         try:
             if relay_message.direction == "reporter_to_team":
+                if ticket.assignee_id is None:
+                    await query.answer(
+                        "Ticket is not assigned yet.", show_alert=True
+                    )
+                    return
+                await query.bot.send_message(
+                    chat_id=ticket.assignee_id,
+                    text=f"Update for ticket #{ticket.number}:",
+                )
                 copied = await query.bot.copy_message(
-                    chat_id=team_group_id,
+                    chat_id=ticket.assignee_id,
                     from_chat_id=relay_message.source_chat_id,
                     message_id=relay_message.source_message_id,
-                    message_thread_id=ticket.topic_id,
                 )
-                destination_chat_id = team_group_id
+                destination_chat_id = ticket.assignee_id
                 destination_message_id = copied.message_id
             elif relay_message.relay_method == "text":
                 sent = await query.bot.send_message(
-                    ticket.reporter_id, relay_message.text or ""
+                    ticket.reporter_id,
+                    f"Reply for ticket #{ticket.number}:\n"
+                    f"{relay_message.text or ''}",
                 )
                 destination_chat_id = ticket.reporter_id
                 destination_message_id = sent.message_id
             else:
+                await query.bot.send_message(
+                    chat_id=ticket.reporter_id,
+                    text=f"Reply for ticket #{ticket.number}:",
+                )
                 copied = await query.bot.copy_message(
                     chat_id=ticket.reporter_id,
                     from_chat_id=relay_message.source_chat_id,
@@ -148,73 +261,6 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
         await query.answer("Delivered.")
         if isinstance(query.message, Message):
             await query.message.edit_reply_markup(reply_markup=None)
-
-    @router.message(F.chat.id == team_group_id)
-    async def team_message(message: Message) -> None:
-        if message.from_user is None or message.message_thread_id is None:
-            raise SkipHandler
-        bot = message.bot
-        if bot is None:
-            return
-        explicit = bool(message.text and message.text.startswith("/reply"))
-        reply_id = (
-            message.reply_to_message.message_id if message.reply_to_message else None
-        )
-        try:
-            ticket = service.team_destination(
-                message.from_user.id,
-                topic_id=message.message_thread_id,
-                reply_to_message_id=reply_id,
-                explicit=explicit,
-            )
-        except (PermissionError, ValueError):
-            raise SkipHandler from None
-
-        text = (message.text or "").removeprefix("/reply").strip() if explicit else None
-        if explicit and not text:
-            await message.reply("Usage: /reply <message>")
-            return
-        relay_method = "text" if explicit else "copy"
-        try:
-            if explicit:
-                sent = await bot.send_message(ticket.reporter_id, text or "")
-                destination_message_id = sent.message_id
-            else:
-                copied = await bot.copy_message(
-                    chat_id=ticket.reporter_id,
-                    from_chat_id=team_group_id,
-                    message_id=message.message_id,
-                )
-                destination_message_id = copied.message_id
-        except TelegramAPIError:
-            failed_id = repository.record_message(
-                ticket_number=ticket.number,
-                direction="team_to_reporter",
-                source_chat_id=team_group_id,
-                source_message_id=message.message_id,
-                destination_chat_id=ticket.reporter_id,
-                destination_message_id=None,
-                text=text or message.text or message.caption,
-                relay_method=relay_method,
-                delivery_status="failed",
-            )
-            await message.reply(
-                "Delivery failed. Message saved.",
-                reply_markup=retry_delivery(failed_id),
-            )
-            return
-        repository.record_message(
-            ticket_number=ticket.number,
-            direction="team_to_reporter",
-            source_chat_id=team_group_id,
-            source_message_id=message.message_id,
-            destination_chat_id=ticket.reporter_id,
-            destination_message_id=destination_message_id,
-            text=text or message.text or message.caption,
-            relay_method=relay_method,
-            delivery_status="sent",
-        )
-        await message.reply("Sent to reporter.")
 
     return router
 
@@ -238,16 +284,29 @@ async def _relay_reporter_message(
     repository: Repository,
     reporter_id: int,
     source_message_id: int,
-    team_group_id: int,
     ticket: Ticket,
     text: str | None,
 ) -> int | None:
+    if ticket.assignee_id is None:
+        return repository.record_message(
+            ticket_number=ticket.number,
+            direction="reporter_to_team",
+            source_chat_id=reporter_id,
+            source_message_id=source_message_id,
+            destination_chat_id=None,
+            destination_message_id=None,
+            text=text,
+            delivery_status="pending",
+        )
     try:
+        await bot.send_message(
+            chat_id=ticket.assignee_id,
+            text=f"Update for ticket #{ticket.number}:",
+        )
         delivered = await bot.copy_message(
-            chat_id=team_group_id,
+            chat_id=ticket.assignee_id,
             from_chat_id=reporter_id,
             message_id=source_message_id,
-            message_thread_id=ticket.topic_id,
         )
     except TelegramAPIError:
         return repository.record_message(
@@ -255,7 +314,7 @@ async def _relay_reporter_message(
             direction="reporter_to_team",
             source_chat_id=reporter_id,
             source_message_id=source_message_id,
-            destination_chat_id=team_group_id,
+            destination_chat_id=ticket.assignee_id,
             destination_message_id=None,
             text=text,
             delivery_status="failed",
@@ -265,7 +324,7 @@ async def _relay_reporter_message(
         direction="reporter_to_team",
         source_chat_id=reporter_id,
         source_message_id=source_message_id,
-        destination_chat_id=team_group_id,
+        destination_chat_id=ticket.assignee_id,
         destination_message_id=delivered.message_id,
         text=text,
         delivery_status="sent",

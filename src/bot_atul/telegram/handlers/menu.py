@@ -27,8 +27,8 @@ HELP_TEXT = (
     "reports. The bot will notify you about replies and status changes."
 )
 TEAM_HELP_TEXT = (
-    "In a ticket topic, reply directly to a relayed reporter message or use "
-    "/reply <message>. Use the ticket buttons to assign and update status."
+    "Assign a dashboard ticket to receive its private workspace. Use Reply to "
+    "Reporter and the status buttons from that private chat."
 )
 HINTS = {
     "user_add": "/user_add <telegram_id> <reporter|agent|admin>",

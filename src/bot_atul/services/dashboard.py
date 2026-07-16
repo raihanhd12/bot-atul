@@ -6,23 +6,32 @@ from aiogram import Bot
 from aiogram.exceptions import TelegramAPIError
 
 from bot_atul.db.repositories import Repository
+from bot_atul.services.topics import create_ticket_card
 from bot_atul.telegram.keyboards import dashboard_actions
 
 LOGGER = logging.getLogger(__name__)
 
 
-def topic_link(group_id: int, topic_id: int) -> str:
+def topic_link(group_id: int, topic_id: int, message_id: int | None = None) -> str:
     internal_id = str(abs(group_id)).removeprefix("100")
-    return f"https://t.me/c/{internal_id}/{topic_id}"
+    suffix = f"/{message_id}" if message_id is not None else ""
+    return f"https://t.me/c/{internal_id}/{topic_id}{suffix}"
 
 
-def build_dashboard(repository: Repository, now: datetime, team_group_id: int) -> str:
+def build_dashboard(
+    repository: Repository,
+    now: datetime,
+    team_group_id: int,
+    dashboard_topic_id: int,
+) -> str:
     rows = repository.connection.execute(
         """
-        SELECT number, title, urgency, status, topic_id, assignee_id,
+        SELECT t.number, t.title, t.urgency, t.status, t.assignee_id,
+               c.message_id AS dashboard_card_id,
                CAST(julianday(?) - julianday(created_at) AS INTEGER) AS age_days
-        FROM tickets
-        WHERE status IN ('Open', 'In Progress')
+        FROM tickets t
+        LEFT JOIN ticket_dashboard_cards c ON c.ticket_number = t.number
+        WHERE t.status IN ('Open', 'In Progress')
         ORDER BY CASE urgency
             WHEN 'Critical' THEN 1 WHEN 'High' THEN 2
             WHEN 'Normal' THEN 3 ELSE 4 END, number
@@ -36,8 +45,12 @@ def build_dashboard(repository: Repository, now: datetime, team_group_id: int) -
     groups: dict[str, list[str]] = {"Open": [], "In Progress": []}
     for row in rows:
         link = (
-            topic_link(team_group_id, int(row["topic_id"]))
-            if row["topic_id"] is not None
+            topic_link(
+                team_group_id,
+                dashboard_topic_id,
+                int(row["dashboard_card_id"]),
+            )
+            if row["dashboard_card_id"] is not None
             else ""
         )
         owner = f" · Agent {row['assignee_id']}" if row["assignee_id"] else ""
@@ -78,8 +91,18 @@ async def publish_dashboard(
     dashboard_topic_id: int,
     now: datetime,
 ) -> int:
+    for ticket in repository.actionable_tickets():
+        await create_ticket_card(
+            bot,
+            repository,
+            team_group_id,
+            dashboard_topic_id,
+            ticket,
+        )
     digest_date = now.date().isoformat()
-    pages = dashboard_pages(build_dashboard(repository, now, team_group_id))
+    pages = dashboard_pages(
+        build_dashboard(repository, now, team_group_id, dashboard_topic_id)
+    )
     rows = repository.connection.execute(
         "SELECT page, message_id FROM dashboard_posts WHERE digest_date = ?",
         (digest_date,),

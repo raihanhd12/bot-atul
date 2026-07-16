@@ -2,10 +2,10 @@
 
 Self-hosted Telegram issue-management bot for private support teams.
 
-Approved users report issues through the bot's direct messages. The bot creates
-one topic per issue in a private Telegram forum group, relays conversation
-between the reporter and team, tracks ticket status, publishes a weekday action
-dashboard, and exports issue data to Excel.
+Approved users report issues through the bot's direct messages. The bot posts
+ticket cards in one private Telegram dashboard topic, gives assigned agents a
+private DM workspace, relays conversation privately, tracks ticket status,
+publishes a weekday action dashboard, and exports issue data to Excel.
 
 ## Features
 
@@ -15,7 +15,7 @@ dashboard, and exports issue data to Excel.
 - Low, Normal, High, and Critical urgency
 - Multi-message descriptions without silent truncation
 - Photo and document attachments
-- One private forum topic per ticket
+- One shared team dashboard topic with private agent workspaces
 - Safe two-way message relay
 - Assignment and status controls
 - Reporter confirmation when an issue is marked Fixed
@@ -267,25 +267,23 @@ manual BotFather command-menu configuration is optional.
    - description;
    - optional attachments;
    - final confirmation.
-5. The bot creates the ticket topic and sends the ticket number.
+5. The bot posts a card in the dashboard topic and sends the ticket number.
 6. Further private messages are routed to the active ticket.
 7. If the reporter has several active tickets, the bot asks which ticket should
    receive the message.
 
 ## Team Flow
 
-Each ticket topic contains the ticket card and status controls.
+Each ticket appears as a card in the shared dashboard topic.
 
 Team members can:
 
 - assign the ticket to themselves;
-- start work;
-- mark it Fixed;
-- close or reopen it;
-- reply directly to a relayed reporter message;
-- send `/reply <message>` for a deliberate private response.
+- receive a private ticket workspace from the bot;
+- start work, mark it Fixed, close, or reopen it from that workspace;
+- use **Reply to Reporter** to send a private response.
 
-Ordinary topic discussion is internal and is not sent to the reporter.
+Reporter messages and team responses are never posted in the dashboard topic.
 
 ## Daily Dashboard
 
@@ -297,7 +295,7 @@ The Issue Dashboard topic is updated:
 - when an admin selects **Refresh List**.
 
 It lists all Open and In Progress tickets grouped by status, including urgency,
-age, assignee, and a direct topic link. Long dashboards are split across
+age, assignee, and a direct ticket-card link. Long dashboards are split across
 ordered messages rather than truncated.
 
 ## Excel Export
@@ -306,7 +304,7 @@ Admins can use `/export` or the dashboard's **Export Excel** button.
 
 The workbook contains:
 
-1. **Issues** — filterable ticket details and clickable topic links
+1. **Issues** — filterable ticket details and clickable ticket-card links
 2. **Summary** — counts by status, service, and creation date
 3. **Status History** — transition audit trail
 4. **Description Parts** — ordered chunks for descriptions exceeding Excel's
@@ -366,10 +364,10 @@ data.
 
 ## Troubleshooting
 
-### Bot does not create topics
+### Ticket card does not appear
 
-Confirm the group has Topics enabled and the bot is an administrator with
-permission to manage topics.
+Confirm `TEAM_GROUP_ID` and `DASHBOARD_TOPIC_ID` identify the private forum and
+dashboard topic. The bot must be an administrator that can send messages.
 
 ### User cannot submit an issue
 
@@ -378,8 +376,8 @@ added with `/user_add <id> reporter`.
 
 ### Agent reply is not sent
 
-The agent must directly reply to a reporter message relayed by the bot or use
-`/reply <message>`. Normal topic messages remain internal.
+Open the bot in private and press **Start** before assigning a ticket. Use
+**Reply to Reporter** in the private ticket workspace, then send the message.
 
 ### Docker cannot connect
 

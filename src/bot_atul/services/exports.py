@@ -21,6 +21,7 @@ def export_tickets(
     repository: Repository,
     path: Path,
     team_group_id: int,
+    dashboard_topic_id: int,
     start: date | None = None,
     end: date | None = None,
 ) -> Path:
@@ -31,20 +32,23 @@ def export_tickets(
     where: list[str] = []
     params: list[str] = []
     if start:
-        where.append("date(created_at, '+7 hours') >= ?")
+        where.append("date(t.created_at, '+7 hours') >= ?")
         params.append(start.isoformat())
     if end:
-        where.append("date(created_at, '+7 hours') <= ?")
+        where.append("date(t.created_at, '+7 hours') <= ?")
         params.append(end.isoformat())
     clause = f"WHERE {' AND '.join(where)}" if where else ""
     tickets = repository.connection.execute(
         f"""
-        SELECT number, datetime(created_at, '+7 hours') AS created_at,
-               datetime(updated_at, '+7 hours') AS updated_at,
-               status, urgency, service_name,
-               title, description, reporter_id, assignee_id, fixed_at, closed_at,
-               topic_id
-        FROM tickets {clause} ORDER BY number
+        SELECT t.number, datetime(t.created_at, '+7 hours') AS created_at,
+               datetime(t.updated_at, '+7 hours') AS updated_at,
+               t.status, t.urgency, t.service_name,
+               t.title, t.description, t.reporter_id, t.assignee_id,
+               t.fixed_at, t.closed_at,
+               t.topic_id, c.message_id AS dashboard_card_id
+        FROM tickets t
+        LEFT JOIN ticket_dashboard_cards c ON c.ticket_number = t.number
+        {clause} ORDER BY t.number
         """,
         params,
     ).fetchall()
@@ -69,9 +73,9 @@ def export_tickets(
         "Fixed",
         "Closed",
         "Age (days)",
-        "Topic ID",
+        "Dashboard Card ID",
         "Description Parts",
-        "Topic Link",
+        "Ticket Link",
     ]
     issues.append(issue_headers)
     parts.append(["Ticket", "Part", "Text"])
@@ -87,9 +91,17 @@ def export_tickets(
             for index, chunk in enumerate(split, start=1):
                 parts.append([row["number"], index, chunk])
         link = (
-            topic_link(team_group_id, int(row["topic_id"]))
-            if row["topic_id"] is not None
-            else None
+            topic_link(
+                team_group_id,
+                dashboard_topic_id,
+                int(row["dashboard_card_id"]),
+            )
+            if row["dashboard_card_id"] is not None
+            else (
+                topic_link(team_group_id, int(row["topic_id"]))
+                if row["topic_id"] is not None
+                else None
+            )
         )
         issues.append(
             [
@@ -110,7 +122,11 @@ def export_tickets(
                 _as_datetime(row["fixed_at"]),
                 _as_datetime(row["closed_at"]),
                 None,
-                str(row["topic_id"]) if row["topic_id"] else None,
+                (
+                    str(row["dashboard_card_id"])
+                    if row["dashboard_card_id"]
+                    else None
+                ),
                 len(split) if long_description else 0,
                 link,
             ]

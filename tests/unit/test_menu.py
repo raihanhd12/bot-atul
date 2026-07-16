@@ -1,3 +1,5 @@
+from bot_atul.db.repositories import Ticket
+from bot_atul.telegram.keyboards import dashboard_ticket_actions
 from bot_atul.telegram.menu import (
     main_menu,
     service_actions,
@@ -65,6 +67,23 @@ def test_disable_requires_confirmation() -> None:
         "Yes, Disable",
         "Cancel",
     ]
+
+
+def test_closed_ticket_has_no_dashboard_actions() -> None:
+    ticket = Ticket(
+        number=1,
+        reporter_id=10,
+        service_name="General",
+        urgency="Normal",
+        title="Done",
+        description="Done",
+        status="Closed",
+        topic_id=None,
+        card_message_id=None,
+        assignee_id=None,
+    )
+
+    assert dashboard_ticket_actions(ticket) is None
 
 
 def _keyboard_labels(menu: object) -> list[str]:

@@ -1,16 +1,6 @@
 from bot_atul.db.repositories import Ticket
 
 
-def topic_title(ticket: Ticket) -> str:
-    prefix = f"#{ticket.number} · {ticket.service_name} · "
-    suffix = f" · {ticket.status}"
-    available = 128 - len(prefix) - len(suffix)
-    title = ticket.title
-    if len(title) > available:
-        title = title[: max(available - 1, 0)] + "…"
-    return prefix + title + suffix
-
-
 def ticket_card(ticket: Ticket) -> str:
     return (
         f"📋 Ticket #{ticket.number}\n"
@@ -21,6 +11,10 @@ def ticket_card(ticket: Ticket) -> str:
         f"Reporter: {ticket.reporter_id}\n"
         f"Title: {ticket.title}"
     )
+
+
+def agent_workspace(ticket: Ticket) -> str:
+    return f"{ticket_card(ticket)}\n\nDescription:\n{ticket.description}"
 
 
 def description_chunks(description: str, limit: int = 4_000) -> list[str]:

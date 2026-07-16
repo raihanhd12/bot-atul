@@ -1,5 +1,5 @@
 from bot_atul.db.repositories import Ticket
-from bot_atul.telegram.formatting import description_chunks, ticket_card, topic_title
+from bot_atul.telegram.formatting import description_chunks, ticket_card
 
 
 def ticket(**changes: object) -> Ticket:
@@ -17,13 +17,6 @@ def ticket(**changes: object) -> Ticket:
     }
     values.update(changes)
     return Ticket(**values)  # type: ignore[arg-type]
-
-
-def test_topic_title_is_bounded() -> None:
-    result = topic_title(ticket(title="x" * 200))
-
-    assert len(result) <= 128
-    assert result.endswith("… · Open")
 
 
 def test_description_chunks_are_lossless() -> None:
