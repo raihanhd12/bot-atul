@@ -60,26 +60,78 @@ def admin_menu() -> InlineKeyboardMarkup:
     )
 
 
-def service_menu() -> InlineKeyboardMarkup:
+def service_menu(services: list[str]) -> InlineKeyboardMarkup:
+    rows = [
+        [InlineKeyboardButton(text=name, callback_data=f"admin:service:select:{index}")]
+        for index, name in enumerate(services)
+    ]
+    rows.extend(
+        [
+            [
+                InlineKeyboardButton(
+                    text="＋ Add Service", callback_data="admin:service:add"
+                )
+            ],
+            [InlineKeyboardButton(text="← Admin Panel", callback_data="admin:home")],
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def service_actions(position: int, total: int) -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(text="✏️ Rename", callback_data="admin:service:rename"),
+            InlineKeyboardButton(
+                text="🚫 Disable", callback_data="admin:service:disable"
+            ),
+        ]
+    ]
+    moves = []
+    if position > 0:
+        moves.append(
+            InlineKeyboardButton(
+                text="⬆️ Move Up", callback_data="admin:service:move_up"
+            )
+        )
+    if position < total - 1:
+        moves.append(
+            InlineKeyboardButton(
+                text="⬇️ Move Down", callback_data="admin:service:move_down"
+            )
+        )
+    if moves:
+        rows.append(moves)
+    rows.append(
+        [
+            InlineKeyboardButton(
+                text="← Back to Services", callback_data="admin:services"
+            )
+        ]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def service_disable_confirmation() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="＋ Add", callback_data="admin:hint:service_add"
+                    text="Yes, Disable",
+                    callback_data="admin:service:disable_confirm",
                 ),
                 InlineKeyboardButton(
-                    text="✏️ Rename", callback_data="admin:hint:service_rename"
+                    text="Cancel", callback_data="admin:service:disable_cancel"
                 ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🚫 Disable", callback_data="admin:hint:service_disable"
-                ),
-                InlineKeyboardButton(
-                    text="↕️ Reorder", callback_data="admin:hint:service_move"
-                ),
-            ],
-            [InlineKeyboardButton(text="← Admin Panel", callback_data="admin:home")],
+            ]
+        ]
+    )
+
+
+def service_cancel() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="Cancel", callback_data="admin:service:cancel")]
         ]
     )
 

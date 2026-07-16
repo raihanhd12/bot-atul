@@ -1,6 +1,10 @@
+import sqlite3
+from dataclasses import dataclass
 from datetime import time
+from typing import Literal
 
 from aiogram import F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
@@ -10,6 +14,9 @@ from bot_atul.telegram.menu import (
     admin_menu,
     back_button,
     main_menu,
+    service_actions,
+    service_cancel,
+    service_disable_confirmation,
     service_menu,
     user_menu,
     welcome_text,
@@ -26,11 +33,16 @@ TEAM_HELP_TEXT = (
 HINTS = {
     "user_add": "/user_add <telegram_id> <reporter|agent|admin>",
     "user_disable": "/user_disable <telegram_id>",
-    "service_add": "/service_add <name>",
-    "service_rename": "/service_rename <old> <new>",
-    "service_disable": "/service_disable <name>",
-    "service_move": "/service_move <name> <position>",
 }
+
+
+@dataclass
+class ServiceSession:
+    mode: Literal["selected", "add", "rename"]
+    service: str | None = None
+
+
+SERVICE_SESSIONS: dict[int, ServiceSession] = {}
 
 
 def build_menu_router(repository: Repository, reminder_time: time) -> Router:
@@ -98,21 +110,17 @@ def build_menu_router(repository: Repository, reminder_time: time) -> Router:
             return
         action = query.data.removeprefix("admin:")
         if action == "home":
+            SERVICE_SESSIONS.pop(query.from_user.id, None)
             await _edit(
                 query,
                 "⚙️ Admin Panel\n\nView the current configuration or choose an action.",
                 admin_menu(),
             )
         elif action == "services":
-            services = repository.list_services()
-            text = "\n".join(
-                f"{index}. {name}" for index, name in enumerate(services, start=1)
-            )
-            await _edit(
-                query,
-                f"🧩 Active Services\n\n{text or 'No active services.'}",
-                service_menu(),
-            )
+            SERVICE_SESSIONS.pop(query.from_user.id, None)
+            await _show_services(query, repository)
+        elif action.startswith("service:"):
+            await _service_callback(query, repository, action.removeprefix("service:"))
         elif action == "team":
             await _edit(
                 query,
@@ -145,7 +153,150 @@ def build_menu_router(repository: Repository, reminder_time: time) -> Router:
             return
         await query.answer()
 
+    @router.message((F.chat.type == "private") & F.text)
+    async def service_name(message: Message) -> None:
+        if message.from_user is None or message.text is None:
+            raise SkipHandler
+        session = SERVICE_SESSIONS.get(message.from_user.id)
+        if session is None or session.mode not in {"add", "rename"}:
+            raise SkipHandler
+        try:
+            response = apply_service_name(
+                repository, message.from_user.id, session, message.text
+            )
+        except (PermissionError, ValueError) as error:
+            await message.answer(str(error), reply_markup=service_cancel())
+            return
+        SERVICE_SESSIONS.pop(message.from_user.id, None)
+        services = repository.list_services()
+        await message.answer(
+            f"{response}\n\n{_services_text(services)}",
+            reply_markup=service_menu(services),
+        )
+
     return router
+
+
+def apply_service_name(
+    repository: Repository,
+    actor_id: int,
+    session: ServiceSession,
+    raw_name: str,
+) -> str:
+    if repository.get_role(actor_id) != "admin":
+        raise PermissionError("Not allowed.")
+    name = raw_name.strip()
+    if not name:
+        raise ValueError("Service name cannot be blank.")
+    if len(name) > 64:
+        raise ValueError("Service name must be 64 characters or fewer.")
+    try:
+        if session.mode == "add":
+            repository.add_service(name)
+            details = f"add:{name}"
+            response = f"Service {name} added."
+        elif session.mode == "rename" and session.service is not None:
+            if not repository.rename_service(session.service, name):
+                raise ValueError("That service changed. Open Services and try again.")
+            details = f"rename:{session.service}->{name}"
+            response = f"Service {session.service} renamed to {name}."
+        else:
+            raise ValueError("Service action expired. Open Services and try again.")
+    except sqlite3.IntegrityError as error:
+        raise ValueError(f"Service {name} already exists.") from error
+    repository.record_audit(actor_id, "admin_service", details)
+    return response
+
+
+async def _service_callback(
+    query: CallbackQuery, repository: Repository, action: str
+) -> None:
+    user_id = query.from_user.id
+    services = repository.list_services()
+    if action == "add":
+        SERVICE_SESSIONS[user_id] = ServiceSession("add")
+        await _edit(
+            query,
+            "Send the new service name.\n\nNames may contain spaces.",
+            service_cancel(),
+        )
+        return
+    if action == "cancel":
+        SERVICE_SESSIONS.pop(user_id, None)
+        await _show_services(query, repository)
+        return
+    if action.startswith("select:"):
+        try:
+            selected = services[int(action.removeprefix("select:"))]
+        except (ValueError, IndexError):
+            await query.answer(
+                "Service list changed. Please choose again.", show_alert=True
+            )
+            await _show_services(query, repository)
+            return
+        SERVICE_SESSIONS[user_id] = ServiceSession("selected", selected)
+        await _show_service(query, repository, selected)
+        return
+
+    session = SERVICE_SESSIONS.get(user_id)
+    if session is None or session.service is None or session.service not in services:
+        SERVICE_SESSIONS.pop(user_id, None)
+        await query.answer("Service selection expired.", show_alert=True)
+        await _show_services(query, repository)
+        return
+    name = session.service
+    if action == "rename":
+        session.mode = "rename"
+        await _edit(
+            query,
+            f"Send the new name for {name}.\n\nNames may contain spaces.",
+            service_cancel(),
+        )
+    elif action in {"move_up", "move_down"}:
+        offset = -1 if action == "move_up" else 1
+        if repository.move_service_by(name, offset):
+            repository.record_audit(user_id, "admin_service", f"{action}:{name}")
+        await _show_services(query, repository)
+    elif action == "disable":
+        await _edit(
+            query,
+            f"Disable {name}?\n\nIt will no longer appear in new issue reports.",
+            service_disable_confirmation(),
+        )
+    elif action == "disable_cancel":
+        await _show_service(query, repository, name)
+    elif action == "disable_confirm":
+        if not repository.disable_service(name):
+            await query.answer("Service selection expired.", show_alert=True)
+        else:
+            repository.record_audit(user_id, "admin_service", f"disable:{name}")
+        SERVICE_SESSIONS.pop(user_id, None)
+        await _show_services(query, repository)
+
+
+async def _show_services(query: CallbackQuery, repository: Repository) -> None:
+    services = repository.list_services()
+    await _edit(query, _services_text(services), service_menu(services))
+
+
+async def _show_service(
+    query: CallbackQuery, repository: Repository, name: str
+) -> None:
+    services = repository.list_services()
+    if name not in services:
+        SERVICE_SESSIONS.pop(query.from_user.id, None)
+        await _show_services(query, repository)
+        return
+    await _edit(
+        query,
+        f"🧩 Service\n\n{name}\n\nChoose an action.",
+        service_actions(services.index(name), len(services)),
+    )
+
+
+def _services_text(services: list[str]) -> str:
+    text = "\n".join(f"{index}. {name}" for index, name in enumerate(services, start=1))
+    return f"🧩 Active Services\n\n{text or 'No active services.'}"
 
 
 def _format_users(users: list[UserRecord]) -> str:

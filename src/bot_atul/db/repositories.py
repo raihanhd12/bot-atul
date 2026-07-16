@@ -251,6 +251,22 @@ class Repository:
             )
         return True
 
+    def move_service_by(self, name: str, offset: int) -> bool:
+        services = self.list_services()
+        if name not in services:
+            return False
+        current = services.index(name)
+        target = current + offset
+        if target < 0 or target >= len(services):
+            return False
+        services[current], services[target] = services[target], services[current]
+        with self.connection:
+            self.connection.executemany(
+                "UPDATE services SET position = ? WHERE name = ? AND enabled = 1",
+                ((position, service) for position, service in enumerate(services)),
+            )
+        return True
+
     def record_audit(self, actor_id: int, event_type: str, details: str) -> None:
         with self.connection:
             self.connection.execute(
