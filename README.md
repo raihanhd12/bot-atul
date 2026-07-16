@@ -1,6 +1,6 @@
 # Bot Atul
 
-Private Telegram issue-management bot for a small internal support team.
+Self-hosted Telegram issue-management bot for private support teams.
 
 Approved users report issues through the bot's direct messages. The bot creates
 one topic per issue in a private Telegram forum group, relays conversation
@@ -11,11 +11,7 @@ dashboard, and exports issue data to Excel.
 
 - Allowlisted reporters, agents, and admins using numeric Telegram user IDs
 - Guided private-message intake
-- Services:
-  - AI-ML
-  - AI-Agents
-  - AI-Intelligence
-  - AI-Media
+- Customizable service categories
 - Low, Normal, High, and Critical urgency
 - Multi-message descriptions without silent truncation
 - Photo and document attachments
@@ -23,7 +19,7 @@ dashboard, and exports issue data to Excel.
 - Safe two-way message relay
 - Assignment and status controls
 - Reporter confirmation when an issue is marked Fixed
-- Monday-to-Friday issue dashboard at 09:00 Asia/Jakarta
+- Monday-to-Friday issue dashboard at 09:00 in the configured timezone
 - Admin-only `.xlsx` export with date filtering
 - Durable failed-message records and retry buttons
 
@@ -63,6 +59,18 @@ docs/superpowers/
 The `src/bot_atul/` directory is intentionally retained as the Python package
 namespace. It avoids conflicts with generic installed packages named `db`,
 `services`, or `telegram`.
+
+## Default Categories
+
+New installations start with generic categories:
+
+- General
+- Technical
+- Billing
+- Other
+
+Admins can add, rename, disable, and reorder categories from Telegram. These
+defaults are examples, not a required support taxonomy.
 
 ## Requirements
 
@@ -199,7 +207,7 @@ Examples:
 ```text
 /user_add 123456789 reporter
 /user_add 987654321 agent
-/service_move AI-Media 1
+/service_move Technical 1
 /export 2026-07-01 2026-07-31
 ```
 
@@ -242,7 +250,7 @@ Ordinary topic discussion is internal and is not sent to the reporter.
 
 The Issue Dashboard topic is updated:
 
-- automatically at 09:00 Asia/Jakarta, Monday through Friday;
+- automatically at 09:00 in `TIMEZONE`, Monday through Friday;
 - after a new ticket is submitted;
 - after assignment or status changes;
 - when an admin selects **Refresh List**.
@@ -301,6 +309,19 @@ using it for real production issues, complete these remaining steps:
 
 The current version is suitable for staging, not yet recommended for production
 data.
+
+## Security and Privacy
+
+- Keep `.env`, bot tokens, database files, exports, and backups out of Git.
+- Use numeric Telegram IDs for authorization; usernames can change.
+- Keep the support group private and grant bot permissions only as required.
+- Treat exported workbooks as sensitive because they contain issue descriptions
+  and user identifiers.
+- Store `data/` and `backups/` on access-controlled persistent storage.
+- Rotate the BotFather token immediately if it is exposed.
+- Review the repository history before making a previously private repository
+  public; deleting a secret from the latest commit does not remove it from old
+  commits.
 
 ## Troubleshooting
 

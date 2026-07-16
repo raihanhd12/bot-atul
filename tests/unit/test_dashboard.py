@@ -25,14 +25,14 @@ def test_dashboard_lists_only_actionable_tickets() -> None:
     repository.upsert_user(20, "agent")
     open_ticket = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-Agents",
+        service_name="Technical",
         urgency="High",
         title="Agent fails",
         description="Details",
     )
     working = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-ML",
+        service_name="General",
         urgency="Normal",
         title="Model drift",
         description="Details",

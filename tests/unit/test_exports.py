@@ -18,7 +18,7 @@ def test_export_has_four_sheets_and_lossless_long_description(tmp_path: Path) ->
     description = "🚀abc" * 10_000
     ticket = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-Media",
+        service_name="Other",
         urgency="Critical",
         title="Render failure",
         description=description,

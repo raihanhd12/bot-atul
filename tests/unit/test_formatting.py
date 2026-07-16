@@ -6,7 +6,7 @@ def ticket(**changes: object) -> Ticket:
     values: dict[str, object] = {
         "number": 42,
         "reporter_id": 10,
-        "service_name": "AI-Agents",
+        "service_name": "Technical",
         "urgency": "High",
         "title": "Agent cannot start",
         "description": "Detailed failure",
@@ -38,7 +38,7 @@ def test_ticket_card_contains_required_fields() -> None:
     card = ticket_card(ticket())
 
     assert "#42" in card
-    assert "AI-Agents" in card
+    assert "Technical" in card
     assert "High" in card
     assert "Open" in card
     assert "Reporter: 10" in card

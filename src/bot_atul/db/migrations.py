@@ -110,7 +110,7 @@ CREATE INDEX IF NOT EXISTS messages_ticket_idx ON ticket_messages(ticket_number)
 CREATE INDEX IF NOT EXISTS history_ticket_idx ON status_history(ticket_number);
 """
 
-SERVICES = ("AI-ML", "AI-Agents", "AI-Intelligence", "AI-Media")
+SERVICES = ("General", "Technical", "Billing", "Other")
 
 
 def migrate(connection: sqlite3.Connection) -> None:

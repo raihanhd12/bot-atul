@@ -18,14 +18,14 @@ def relay() -> tuple[Repository, RelayService, int, int]:
     repository.upsert_user(20, "agent")
     first = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-Agents",
+        service_name="Technical",
         urgency="Normal",
         title="First",
         description="One",
     )
     second = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-ML",
+        service_name="General",
         urgency="Normal",
         title="Second",
         description="Two",

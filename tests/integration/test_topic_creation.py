@@ -41,7 +41,7 @@ async def test_topic_creation_is_idempotent() -> None:
     repository.upsert_user(10, "reporter")
     ticket = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-Agents",
+        service_name="Technical",
         urgency="High",
         title="Agent cannot start",
         description="x" * 8_500,

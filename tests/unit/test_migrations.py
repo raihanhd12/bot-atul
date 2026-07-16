@@ -31,8 +31,8 @@ def test_migration_creates_schema_and_services() -> None:
         "SELECT name FROM services ORDER BY position"
     ).fetchall()
     assert services == [
-        ("AI-ML",),
-        ("AI-Agents",),
-        ("AI-Intelligence",),
-        ("AI-Media",),
+        ("General",),
+        ("Technical",),
+        ("Billing",),
+        ("Other",),
     ]

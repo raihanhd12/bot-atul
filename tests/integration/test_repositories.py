@@ -21,7 +21,7 @@ def test_ticket_round_trip_preserves_long_description(repository: Repository) ->
 
     ticket = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-Agents",
+        service_name="Technical",
         urgency="High",
         title="Agent cannot start",
         description=description,
@@ -31,7 +31,7 @@ def test_ticket_round_trip_preserves_long_description(repository: Repository) ->
     stored = repository.get_ticket(ticket.number)
     assert stored is not None
     assert stored.description == description
-    assert stored.service_name == "AI-Agents"
+    assert stored.service_name == "Technical"
     assert stored.status == "Open"
     attachment = repository.connection.execute(
         "SELECT telegram_file_id, file_name FROM attachments WHERE ticket_number = ?",

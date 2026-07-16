@@ -19,7 +19,7 @@ def workflow() -> tuple[Repository, TicketWorkflow, int]:
     repository.upsert_user(30, "admin")
     ticket = repository.create_ticket(
         reporter_id=10,
-        service_name="AI-Agents",
+        service_name="Technical",
         urgency="Normal",
         title="Tool call fails",
         description="Details",
