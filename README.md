@@ -280,8 +280,14 @@ manual BotFather command-menu configuration is optional.
 
 ## Team Flow
 
-Each ticket appears as a view-only card in the shared dashboard topic. No assign
-or close buttons appear in the group.
+Each ticket appears as a polished view-only card in the shared dashboard topic:
+
+- status and urgency icons (for example ✅ Closed, 🚨 Critical);
+- display names and `@username` instead of raw Telegram IDs;
+- **View Details / Hide Details** so the whole team can expand the description
+  in the topic.
+
+No assign or close buttons appear in the group.
 
 After reporting, the submitter receives a private ticket workspace and can:
 

@@ -70,7 +70,7 @@ def test_disable_requires_confirmation() -> None:
     ]
 
 
-def test_dashboard_cards_are_view_only() -> None:
+def test_dashboard_cards_are_view_only_with_details_toggle() -> None:
     open_ticket = Ticket(
         number=1,
         reporter_id=10,
@@ -96,8 +96,17 @@ def test_dashboard_cards_are_view_only() -> None:
         assignee_id=None,
     )
 
-    assert dashboard_ticket_actions(open_ticket) is None
-    assert dashboard_ticket_actions(closed_ticket) is None
+    open_labels = _keyboard_labels(dashboard_ticket_actions(open_ticket))
+    closed_labels = _keyboard_labels(dashboard_ticket_actions(closed_ticket))
+    detailed_labels = _keyboard_labels(
+        dashboard_ticket_actions(open_ticket, detailed=True)
+    )
+
+    assert open_labels == ["📄 View Details"]
+    assert closed_labels == ["📄 View Details"]
+    assert detailed_labels == ["▲ Hide Details"]
+    assert "Assign" not in " ".join(open_labels)
+    assert "Close" not in " ".join(open_labels)
 
 
 def test_self_owned_workspace_hides_reply_to_reporter() -> None:

@@ -229,6 +229,38 @@ class Repository:
         ).fetchone()
         return str(row[0]) if row else None
 
+    def get_user(self, telegram_id: int) -> UserRecord | None:
+        row = self.connection.execute(
+            """
+            SELECT telegram_id, role, username, display_name
+            FROM users
+            WHERE telegram_id = ?
+            """,
+            (telegram_id,),
+        ).fetchone()
+        return UserRecord(**dict(row)) if row else None
+
+    def user_label(self, telegram_id: int | None) -> str:
+        if telegram_id is None:
+            return "Unassigned"
+        user = self.get_user(telegram_id)
+        if user is None:
+            return f"User {telegram_id}"
+        if user.display_name and user.username:
+            return f"{user.display_name} (@{user.username})"
+        if user.display_name:
+            return user.display_name
+        if user.username:
+            return f"@{user.username}"
+        return f"User {telegram_id}"
+
+    def user_labels(self, *telegram_ids: int | None) -> dict[int, str]:
+        labels: dict[int, str] = {}
+        for telegram_id in telegram_ids:
+            if telegram_id is not None and telegram_id not in labels:
+                labels[telegram_id] = self.user_label(telegram_id)
+        return labels
+
     def remember_user(
         self, telegram_id: int, username: str | None, display_name: str
     ) -> None:

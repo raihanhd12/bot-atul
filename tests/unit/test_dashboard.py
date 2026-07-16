@@ -23,6 +23,7 @@ def test_dashboard_lists_only_actionable_tickets() -> None:
     repository = Repository(connection)
     repository.upsert_user(10, "agent")
     repository.upsert_user(20, "agent")
+    repository.remember_user(20, "andi", "Andi Agent")
     open_ticket = repository.create_ticket(
         reporter_id=10,
         service_name="Technical",
@@ -51,10 +52,10 @@ def test_dashboard_lists_only_actionable_tickets() -> None:
 
     assert "Monday Issue Check" in text
     assert "20 July 2026" in text
-    assert "🔴 Open (1)" in text
-    assert "🟡 In Progress (1)" in text
-    assert "#1 Agent fails · High" in text
-    assert "#2 Model drift · Normal · Agent 20" in text
+    assert "🆕 Open (1)" in text
+    assert "🔄 In Progress (1)" in text
+    assert "#1 Agent fails · 🔺 High" in text
+    assert "Andi Agent (@andi)" in text
     assert "https://t.me/c/1/24/101" in text
 
 

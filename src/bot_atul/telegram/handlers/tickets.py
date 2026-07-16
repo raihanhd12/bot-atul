@@ -1,3 +1,4 @@
+from contextlib import suppress
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -11,14 +12,12 @@ from bot_atul.services.topics import (
     create_agent_workspace,
     create_ticket_card,
     deliver_pending_reporter_messages,
+    render_dashboard_card,
+    ticket_names,
 )
 from bot_atul.services.workflow import TicketWorkflow
-from bot_atul.telegram.formatting import agent_workspace, ticket_card
-from bot_atul.telegram.keyboards import (
-    agent_ticket_actions,
-    dashboard_ticket_actions,
-    fix_confirmation,
-)
+from bot_atul.telegram.formatting import agent_workspace
+from bot_atul.telegram.keyboards import agent_ticket_actions, fix_confirmation
 
 
 def build_ticket_router(
@@ -40,6 +39,19 @@ def build_ticket_router(
         _, action, number_text = query.data.split(":", 2)
         number = int(number_text)
         actor_id = query.from_user.id
+
+        if action in {"detail", "summary"}:
+            await _toggle_topic_detail(
+                query,
+                bot,
+                repository,
+                team_group_id,
+                dashboard_topic_id,
+                number,
+                detailed=action == "detail",
+            )
+            return
+
         try:
             if action == "assign":
                 # Legacy unassigned tickets only; normal reports auto-assign.
@@ -111,6 +123,37 @@ def build_ticket_router(
     return router
 
 
+async def _toggle_topic_detail(
+    query: CallbackQuery,
+    bot: Bot,
+    repository: Repository,
+    team_group_id: int,
+    dashboard_topic_id: int,
+    number: int,
+    *,
+    detailed: bool,
+) -> None:
+    if repository.get_role(query.from_user.id) not in {"agent", "admin"}:
+        await query.answer("Team access required.", show_alert=True)
+        return
+    ticket = repository.get_ticket(number)
+    if ticket is None:
+        await query.answer("Ticket not found.", show_alert=True)
+        return
+    if repository.get_dashboard_card(number) is None:
+        await create_ticket_card(
+            bot, repository, team_group_id, dashboard_topic_id, ticket
+        )
+    try:
+        await render_dashboard_card(
+            bot, repository, team_group_id, ticket, detailed=detailed
+        )
+    except TelegramAPIError:
+        await query.answer("Could not update the topic card.", show_alert=True)
+        return
+    await query.answer("Details" if detailed else "Summary")
+
+
 async def _refresh_ticket(
     bot: Bot,
     repository: Repository,
@@ -120,25 +163,25 @@ async def _refresh_ticket(
 ) -> None:
     dashboard_card = repository.get_dashboard_card(ticket.number)
     if dashboard_card is None:
-        dashboard_card = await create_ticket_card(
+        await create_ticket_card(
             bot,
             repository,
             team_group_id,
             dashboard_topic_id,
             ticket,
         )
-    if dashboard_card is not None:
-        await bot.edit_message_text(
-            chat_id=team_group_id,
-            message_id=dashboard_card,
-            text=ticket_card(ticket),
-            reply_markup=dashboard_ticket_actions(ticket),
-        )
+    else:
+        with suppress(TelegramAPIError):
+            await render_dashboard_card(
+                bot, repository, team_group_id, ticket, detailed=False
+            )
     workspace = repository.get_agent_workspace(ticket.number)
     if workspace is not None:
-        await bot.edit_message_text(
-            chat_id=workspace.agent_id,
-            message_id=workspace.message_id,
-            text=agent_workspace(ticket)[:4_096],
-            reply_markup=agent_ticket_actions(ticket),
-        )
+        names = await ticket_names(bot, repository, ticket)
+        with suppress(TelegramAPIError):
+            await bot.edit_message_text(
+                chat_id=workspace.agent_id,
+                message_id=workspace.message_id,
+                text=agent_workspace(ticket, names=names)[:4_096],
+                reply_markup=agent_ticket_actions(ticket),
+            )

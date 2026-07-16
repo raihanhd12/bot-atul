@@ -27,11 +27,26 @@ def test_description_chunks_are_lossless() -> None:
     assert all(len(chunk) <= 200 for chunk in chunks)
 
 
-def test_ticket_card_contains_required_fields() -> None:
-    card = ticket_card(ticket())
+def test_ticket_card_uses_status_icons_and_names() -> None:
+    card = ticket_card(
+        ticket(status="Closed", assignee_id=10, urgency="Critical"),
+        names={10: "Raihan (@raihan)"},
+    )
 
-    assert "#42" in card
-    assert "Technical" in card
-    assert "High" in card
-    assert "Open" in card
-    assert "Reporter: 10" in card
+    assert "✅ Ticket #42 · Closed" in card
+    assert "🚨 Urgency   Critical" in card
+    assert "👤 Reported  Raihan (@raihan)" in card
+    assert "🧑‍💻 Owner     Raihan (@raihan)" in card
+    assert "Agent cannot start" in card
+    assert "Detailed failure" not in card
+
+
+def test_ticket_card_detailed_includes_description() -> None:
+    card = ticket_card(
+        ticket(description="Full stack trace here"),
+        names={10: "Andi"},
+        detailed=True,
+    )
+
+    assert "📝 Details" in card
+    assert "Full stack trace here" in card

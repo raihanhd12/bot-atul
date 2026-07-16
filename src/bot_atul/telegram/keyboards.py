@@ -27,10 +27,21 @@ def review_actions() -> InlineKeyboardMarkup:
     )
 
 
-def dashboard_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
-    """Dashboard topic cards are view-only; no group actions."""
-    del ticket
-    return None
+def dashboard_ticket_actions(
+    ticket: Ticket, *, detailed: bool = False
+) -> InlineKeyboardMarkup:
+    """Topic cards are view-only for the team: expand/collapse details."""
+    if detailed:
+        button = InlineKeyboardButton(
+            text="▲ Hide Details",
+            callback_data=f"ticket:summary:{ticket.number}",
+        )
+    else:
+        button = InlineKeyboardButton(
+            text="📄 View Details",
+            callback_data=f"ticket:detail:{ticket.number}",
+        )
+    return InlineKeyboardMarkup(inline_keyboard=[[button]])
 
 
 def agent_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup:

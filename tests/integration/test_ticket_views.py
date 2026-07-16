@@ -17,6 +17,7 @@ class FakeBot:
         self.messages: list[dict[str, object]] = []
         self.copies: list[dict[str, object]] = []
         self.attachments: list[dict[str, object]] = []
+        self.edits: list[dict[str, object]] = []
 
     async def send_message(self, **kwargs: object) -> SimpleNamespace:
         self.messages.append(kwargs)
@@ -33,6 +34,15 @@ class FakeBot:
     async def send_photo(self, **kwargs: object) -> SimpleNamespace:
         self.attachments.append(kwargs)
         return SimpleNamespace(message_id=200 + len(self.attachments))
+
+    async def get_chat(self, chat_id: int) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=chat_id, username=None, full_name=None, first_name=None
+        )
+
+    async def edit_message_text(self, **kwargs: object) -> SimpleNamespace:
+        self.edits.append(kwargs)
+        return SimpleNamespace(message_id=kwargs.get("message_id", 0))
 
 
 @pytest.fixture
@@ -67,6 +77,8 @@ async def test_ticket_card_stays_in_dashboard_topic(
     assert stored.card_message_id == 1
     assert repository.get_dashboard_card(ticket.number) == 1
     assert bot.messages[0]["message_thread_id"] == 24
+    assert "🔺 Urgency   High" in str(bot.messages[0]["text"])
+    assert "View Details" in str(bot.messages[0]["reply_markup"])
 
     await create_ticket_card(bot, repository, -1001, 24, stored)
     assert len(bot.messages) == 1

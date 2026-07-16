@@ -53,20 +53,32 @@ def build_dashboard(
             if row["dashboard_card_id"] is not None
             else ""
         )
-        owner = f" · Agent {row['assignee_id']}" if row["assignee_id"] else ""
+        owner = (
+            f" · {repository.user_label(int(row['assignee_id']))}"
+            if row["assignee_id"] is not None
+            else ""
+        )
         age = f" · {row['age_days']}d" if row["age_days"] else " · Today"
+        urgency_icon = {
+            "Critical": "🚨",
+            "High": "🔺",
+            "Normal": "▪️",
+            "Low": "▫️",
+        }.get(str(row["urgency"]), "•")
+        status_icon = "🆕" if row["status"] == "Open" else "🔄"
         groups[str(row["status"])].append(
-            f"• #{row['number']} {row['title']} · {row['urgency']}{owner}{age}\n{link}"
+            f"{status_icon} #{row['number']} {row['title']} · "
+            f"{urgency_icon} {row['urgency']}{owner}{age}\n{link}"
         )
 
     lines = [
         f"📋 {now.strftime('%A')} Issue Check",
         f"{now.day} {now.strftime('%B %Y')} · {len(rows)} need attention",
         "",
-        f"🔴 Open ({len(groups['Open'])})",
+        f"🆕 Open ({len(groups['Open'])})",
         *(groups["Open"] or ["• None"]),
         "",
-        f"🟡 In Progress ({len(groups['In Progress'])})",
+        f"🔄 In Progress ({len(groups['In Progress'])})",
         *(groups["In Progress"] or ["• None"]),
         "",
         f"✅ Fixed yesterday: {fixed_count}",
