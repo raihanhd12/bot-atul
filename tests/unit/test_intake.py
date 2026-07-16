@@ -1,6 +1,15 @@
+from unittest.mock import AsyncMock, Mock, patch
+from zoneinfo import ZoneInfo
+
 import pytest
+from aiogram.types import Chat, Message, User
 
 from bot_atul.services.tickets import IntakeSession, IntakeStep
+from bot_atul.telegram.handlers.intake import (
+    SESSIONS,
+    begin_intake,
+    build_intake_router,
+)
 
 
 def test_guided_intake_preserves_multi_message_description() -> None:
@@ -49,3 +58,29 @@ def test_description_is_required() -> None:
 
     with pytest.raises(ValueError, match="description"):
         session.complete_description()
+
+
+async def test_title_message_reaches_intake_handler() -> None:
+    repository = Mock()
+    repository.get_role.return_value = "reporter"
+    repository.list_services.return_value = ["AI-ML"]
+    begin_intake(repository, 99)
+    router = build_intake_router(
+        repository, -100, 1, ZoneInfo("Asia/Jakarta")
+    )
+    message = Message(
+        message_id=1,
+        date=0,
+        chat=Chat(id=99, type="private"),
+        from_user=User(id=99, is_bot=False, first_name="Reporter"),
+        text="kucing jalanan",
+    )
+
+    try:
+        with patch.object(Message, "answer", new=AsyncMock()) as answer:
+            await router.message.trigger(message, bot=Mock())
+
+        assert answer.await_args.args[0] == "Which service?"
+        assert SESSIONS[99].step is IntakeStep.SERVICE
+    finally:
+        SESSIONS.pop(99, None)

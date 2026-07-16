@@ -37,7 +37,7 @@ def build_intake_router(
 ) -> Router:
     router = Router(name="intake")
 
-    @router.message(Command("new") & (F.chat.type == "private"))
+    @router.message(Command("new"), F.chat.type == "private")
     async def start(message: Message) -> None:
         if message.from_user is None:
             return
