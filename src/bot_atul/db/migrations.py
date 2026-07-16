@@ -83,9 +83,11 @@ CREATE TABLE IF NOT EXISTS status_history (
 );
 
 CREATE TABLE IF NOT EXISTS dashboard_posts (
-    digest_date TEXT PRIMARY KEY,
+    digest_date TEXT NOT NULL,
+    page INTEGER NOT NULL,
     message_id INTEGER NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (digest_date, page)
 );
 
 CREATE TABLE IF NOT EXISTS processed_updates (
