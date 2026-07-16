@@ -9,9 +9,11 @@ from bot_atul.db.connection import connect
 from bot_atul.db.migrations import migrate
 from bot_atul.db.repositories import Repository
 from bot_atul.services.dashboard import next_dashboard_run, safe_publish_dashboard
+from bot_atul.telegram.commands import register_commands
 from bot_atul.telegram.handlers.admin import build_admin_router
 from bot_atul.telegram.handlers.dashboard import build_dashboard_router
 from bot_atul.telegram.handlers.intake import build_intake_router
+from bot_atul.telegram.handlers.menu import build_menu_router
 from bot_atul.telegram.handlers.relay import build_relay_router
 from bot_atul.telegram.handlers.tickets import build_ticket_router
 
@@ -43,6 +45,7 @@ async def run() -> None:
 
     bot = Bot(config.bot_token)
     dispatcher = Dispatcher()
+    dispatcher.include_router(build_menu_router(repository))
     dispatcher.include_router(build_admin_router(repository))
     dispatcher.include_router(
         build_intake_router(
@@ -72,6 +75,7 @@ async def run() -> None:
     )
     dashboard_task = asyncio.create_task(dashboard_loop(bot, repository, config))
     try:
+        await register_commands(bot, config.admin_ids)
         await dispatcher.start_polling(bot)
     finally:
         dashboard_task.cancel()

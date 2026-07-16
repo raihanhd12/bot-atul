@@ -22,6 +22,7 @@ dashboard, and exports issue data to Excel.
 - Monday-to-Friday issue dashboard at 09:00 in the configured timezone
 - Admin-only `.xlsx` export with date filtering
 - Durable failed-message records and retry buttons
+- Role-aware interactive menu and automatic slash-command registration
 
 ## Ticket Workflow
 
@@ -213,6 +214,28 @@ Examples:
 
 Service changes affect new intake choices. Existing tickets retain the service
 label recorded when they were submitted.
+
+## Interactive Menu
+
+Send `/start` in the bot's private chat to open a persistent menu.
+
+All approved roles can:
+
+- report a new issue;
+- view their active tickets;
+- open help.
+
+Agents and admins also receive team instructions. Admins additionally receive
+Excel export and administration help buttons.
+
+Roles are hierarchical:
+
+- **Reporter** — submits issues
+- **Agent** — submits and handles issues
+- **Admin** — submits, handles, manages users/categories, and exports
+
+The bot registers its slash-command list automatically during startup, so
+manual BotFather command-menu configuration is optional.
 
 ## Reporter Flow
 

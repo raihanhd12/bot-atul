@@ -15,8 +15,8 @@ class Action(StrEnum):
 
 PERMISSIONS = {
     Role.REPORTER: frozenset({Action.SUBMIT}),
-    Role.AGENT: frozenset({Action.HANDLE}),
-    Role.ADMIN: frozenset({Action.HANDLE, Action.ADMIN}),
+    Role.AGENT: frozenset({Action.SUBMIT, Action.HANDLE}),
+    Role.ADMIN: frozenset({Action.SUBMIT, Action.HANDLE, Action.ADMIN}),
 }
 
 

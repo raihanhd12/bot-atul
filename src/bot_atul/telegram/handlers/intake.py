@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from bot_atul.db.repositories import Repository
+from bot_atul.domain.permissions import Action, Role, allowed
 from bot_atul.services.dashboard import safe_publish_dashboard
 from bot_atul.services.tickets import IntakeSession, IntakeStep
 from bot_atul.services.topics import create_ticket_topic
@@ -16,6 +17,7 @@ from bot_atul.telegram.keyboards import (
     reporter_ticket_actions,
     review_actions,
 )
+from bot_atul.telegram.menu import REPORT
 
 URGENCIES = ("Low", "Normal", "High", "Critical")
 
@@ -29,11 +31,12 @@ def build_intake_router(
     router = Router(name="intake")
     sessions: dict[int, IntakeSession] = {}
 
-    @router.message(Command("new"), F.chat.type == "private")
+    @router.message((Command("new") | (F.text == REPORT)) & (F.chat.type == "private"))
     async def start(message: Message) -> None:
         if message.from_user is None:
             return
-        if repository.get_role(message.from_user.id) != "reporter":
+        role = repository.get_role(message.from_user.id)
+        if not allowed(Role(role) if role else None, Action.SUBMIT):
             await message.answer("You are not approved to submit issues.")
             return
         sessions[message.from_user.id] = IntakeSession(

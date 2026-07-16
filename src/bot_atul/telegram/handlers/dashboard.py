@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, FSInputFile, Message
 from bot_atul.db.repositories import Repository
 from bot_atul.services.dashboard import publish_dashboard
 from bot_atul.services.exports import export_tickets
+from bot_atul.telegram.menu import EXPORT
 
 
 def build_dashboard_router(
@@ -20,7 +21,7 @@ def build_dashboard_router(
 ) -> Router:
     router = Router(name="dashboard")
 
-    @router.message(Command("export"))
+    @router.message(Command("export") | (F.text == EXPORT))
     async def export_command(message: Message) -> None:
         if (
             message.from_user is None
