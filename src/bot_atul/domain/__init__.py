@@ -1,0 +1,1 @@
+"""Core ticket rules."""
