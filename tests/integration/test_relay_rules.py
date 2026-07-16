@@ -86,3 +86,24 @@ def test_explicit_reply_uses_topic_ticket(
     _, service, first, _ = relay
 
     assert service.team_destination(20, topic_id=101, explicit=True).number == first
+
+
+def test_failed_delivery_record_can_be_completed(
+    relay: tuple[Repository, RelayService, int, int],
+) -> None:
+    repository, _, first, _ = relay
+    message_id = repository.record_message(
+        ticket_number=first,
+        direction="team_to_reporter",
+        source_chat_id=-1001,
+        source_message_id=80,
+        destination_chat_id=10,
+        destination_message_id=None,
+        text="Please retry",
+        relay_method="text",
+        delivery_status="failed",
+    )
+
+    assert repository.get_relay_message(message_id).delivery_status == "failed"  # type: ignore[union-attr]
+    repository.mark_message_sent(message_id, 10, 81)
+    assert repository.get_relay_message(message_id).delivery_status == "sent"  # type: ignore[union-attr]

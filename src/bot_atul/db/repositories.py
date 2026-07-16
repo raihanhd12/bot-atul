@@ -18,6 +18,20 @@ class Ticket:
     assignee_id: int | None
 
 
+@dataclass(frozen=True)
+class RelayMessage:
+    id: int
+    ticket_number: int
+    direction: str
+    source_chat_id: int
+    source_message_id: int
+    destination_chat_id: int | None
+    destination_message_id: int | None
+    text: str | None
+    relay_method: str
+    delivery_status: str
+
+
 class Repository:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
@@ -315,14 +329,16 @@ class Repository:
         destination_message_id: int | None,
         text: str | None,
         delivery_status: str,
-    ) -> None:
+        relay_method: str = "copy",
+    ) -> int:
         with self.connection:
             self.connection.execute(
                 """
                 INSERT OR IGNORE INTO ticket_messages(
                     ticket_number, direction, source_chat_id, source_message_id,
-                    destination_chat_id, destination_message_id, text, delivery_status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    destination_chat_id, destination_message_id, text,
+                    relay_method, delivery_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     ticket_number,
@@ -332,8 +348,43 @@ class Repository:
                     destination_chat_id,
                     destination_message_id,
                     text,
+                    relay_method,
                     delivery_status,
                 ),
+            )
+        row = self.connection.execute(
+            """
+            SELECT id FROM ticket_messages
+            WHERE source_chat_id = ? AND source_message_id = ? AND direction = ?
+            """,
+            (source_chat_id, source_message_id, direction),
+        ).fetchone()
+        return int(row[0])
+
+    def get_relay_message(self, message_id: int) -> RelayMessage | None:
+        row = self.connection.execute(
+            """
+            SELECT id, ticket_number, direction, source_chat_id, source_message_id,
+                   destination_chat_id, destination_message_id, text,
+                   relay_method, delivery_status
+            FROM ticket_messages WHERE id = ?
+            """,
+            (message_id,),
+        ).fetchone()
+        return RelayMessage(**dict(row)) if row else None
+
+    def mark_message_sent(
+        self, message_id: int, destination_chat_id: int, destination_message_id: int
+    ) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE ticket_messages
+                SET destination_chat_id = ?, destination_message_id = ?,
+                    delivery_status = 'sent'
+                WHERE id = ?
+                """,
+                (destination_chat_id, destination_message_id, message_id),
             )
 
     def ticket_for_team_message(self, destination_message_id: int) -> Ticket | None:

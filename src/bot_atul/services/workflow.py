@@ -29,6 +29,20 @@ class TicketWorkflow:
             number, ticket.status, new_status, reporter_id, reason
         )
 
+    def cancel(self, number: int, reporter_id: int) -> Ticket:
+        ticket = self._ticket(number)
+        if ticket.reporter_id != reporter_id:
+            raise PermissionError("Only the ticket reporter can cancel it.")
+        if ticket.status != TicketStatus.OPEN or ticket.assignee_id is not None:
+            raise ValueError("Only an Open and unassigned ticket can be cancelled.")
+        return self.repository.update_status(
+            number,
+            ticket.status,
+            TicketStatus.CLOSED,
+            reporter_id,
+            "Reporter cancelled",
+        )
+
     def _require_agent(self, actor_id: int) -> None:
         if self.repository.get_role(actor_id) not in {"agent", "admin"}:
             raise PermissionError("Agent access required.")

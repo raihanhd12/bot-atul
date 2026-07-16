@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS ticket_messages (
     destination_chat_id INTEGER,
     destination_message_id INTEGER,
     text TEXT,
+    relay_method TEXT NOT NULL DEFAULT 'copy' CHECK (relay_method IN ('copy', 'text')),
     delivery_status TEXT NOT NULL DEFAULT 'pending',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (source_chat_id, source_message_id, direction)

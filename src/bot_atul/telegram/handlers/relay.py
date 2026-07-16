@@ -1,5 +1,6 @@
 from aiogram import Bot, F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
+from aiogram.exceptions import TelegramAPIError
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -9,6 +10,7 @@ from aiogram.types import (
 
 from bot_atul.db.repositories import Repository, Ticket
 from bot_atul.services.relay import RelayService
+from bot_atul.telegram.keyboards import retry_delivery
 
 
 def build_relay_router(repository: Repository, team_group_id: int) -> Router:
@@ -39,7 +41,7 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
                 reply_markup=_ticket_choices(tickets),
             )
             return
-        await _relay_reporter_message(
+        failed_id = await _relay_reporter_message(
             bot,
             repository,
             message.from_user.id,
@@ -48,7 +50,13 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
             tickets[0],
             message.text or message.caption,
         )
-        await message.answer(f"Added to ticket #{tickets[0].number}.")
+        if failed_id is None:
+            await message.answer(f"Added to ticket #{tickets[0].number}.")
+        else:
+            await message.answer(
+                "Delivery failed. Your message is saved.",
+                reply_markup=retry_delivery(failed_id),
+            )
 
     @router.callback_query(F.data.startswith("relay:ticket:"))
     async def select_ticket(query: CallbackQuery) -> None:
@@ -63,7 +71,7 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
         bot = query.bot
         if bot is None:
             return
-        await _relay_reporter_message(
+        failed_id = await _relay_reporter_message(
             bot,
             repository,
             query.from_user.id,
@@ -72,9 +80,73 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
             ticket,
             None,
         )
-        await query.answer(f"Added to ticket #{number}.")
+        await query.answer(
+            f"Added to ticket #{number}." if failed_id is None else "Delivery failed."
+        )
         if isinstance(query.message, Message):
-            await query.message.edit_text(f"Added to ticket #{number}.")
+            await query.message.edit_text(
+                f"Added to ticket #{number}."
+                if failed_id is None
+                else "Delivery failed. Your message is saved.",
+                reply_markup=retry_delivery(failed_id) if failed_id else None,
+            )
+
+    @router.callback_query(F.data.startswith("relay:retry:"))
+    async def retry(query: CallbackQuery) -> None:
+        if query.data is None or query.bot is None:
+            return
+        message_id = int(query.data.rsplit(":", 1)[1])
+        relay_message = repository.get_relay_message(message_id)
+        if relay_message is None:
+            await query.answer("Delivery record not found.", show_alert=True)
+            return
+        ticket = repository.get_ticket(relay_message.ticket_number)
+        if ticket is None:
+            await query.answer("Ticket not found.", show_alert=True)
+            return
+        role = repository.get_role(query.from_user.id)
+        allowed = (
+            relay_message.direction == "reporter_to_team"
+            and ticket.reporter_id == query.from_user.id
+        ) or (
+            relay_message.direction == "team_to_reporter" and role in {"agent", "admin"}
+        )
+        if not allowed:
+            await query.answer("Not allowed.", show_alert=True)
+            return
+        try:
+            if relay_message.direction == "reporter_to_team":
+                copied = await query.bot.copy_message(
+                    chat_id=team_group_id,
+                    from_chat_id=relay_message.source_chat_id,
+                    message_id=relay_message.source_message_id,
+                    message_thread_id=ticket.topic_id,
+                )
+                destination_chat_id = team_group_id
+                destination_message_id = copied.message_id
+            elif relay_message.relay_method == "text":
+                sent = await query.bot.send_message(
+                    ticket.reporter_id, relay_message.text or ""
+                )
+                destination_chat_id = ticket.reporter_id
+                destination_message_id = sent.message_id
+            else:
+                copied = await query.bot.copy_message(
+                    chat_id=ticket.reporter_id,
+                    from_chat_id=relay_message.source_chat_id,
+                    message_id=relay_message.source_message_id,
+                )
+                destination_chat_id = ticket.reporter_id
+                destination_message_id = copied.message_id
+        except TelegramAPIError:
+            await query.answer("Delivery failed again.", show_alert=True)
+            return
+        repository.mark_message_sent(
+            message_id, destination_chat_id, destination_message_id
+        )
+        await query.answer("Delivered.")
+        if isinstance(query.message, Message):
+            await query.message.edit_reply_markup(reply_markup=None)
 
     @router.message(F.chat.id == team_group_id)
     async def team_message(message: Message) -> None:
@@ -97,20 +169,39 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
         except (PermissionError, ValueError):
             raise SkipHandler from None
 
-        if explicit:
-            text = (message.text or "").removeprefix("/reply").strip()
-            if not text:
-                await message.reply("Usage: /reply <message>")
-                return
-            delivered = await bot.send_message(ticket.reporter_id, text)
-            destination_message_id = delivered.message_id
-        else:
-            copied = await bot.copy_message(
-                chat_id=ticket.reporter_id,
-                from_chat_id=team_group_id,
-                message_id=message.message_id,
+        text = (message.text or "").removeprefix("/reply").strip() if explicit else None
+        if explicit and not text:
+            await message.reply("Usage: /reply <message>")
+            return
+        relay_method = "text" if explicit else "copy"
+        try:
+            if explicit:
+                sent = await bot.send_message(ticket.reporter_id, text or "")
+                destination_message_id = sent.message_id
+            else:
+                copied = await bot.copy_message(
+                    chat_id=ticket.reporter_id,
+                    from_chat_id=team_group_id,
+                    message_id=message.message_id,
+                )
+                destination_message_id = copied.message_id
+        except TelegramAPIError:
+            failed_id = repository.record_message(
+                ticket_number=ticket.number,
+                direction="team_to_reporter",
+                source_chat_id=team_group_id,
+                source_message_id=message.message_id,
+                destination_chat_id=ticket.reporter_id,
+                destination_message_id=None,
+                text=text or message.text or message.caption,
+                relay_method=relay_method,
+                delivery_status="failed",
             )
-            destination_message_id = copied.message_id
+            await message.reply(
+                "Delivery failed. Message saved.",
+                reply_markup=retry_delivery(failed_id),
+            )
+            return
         repository.record_message(
             ticket_number=ticket.number,
             direction="team_to_reporter",
@@ -118,7 +209,8 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
             source_message_id=message.message_id,
             destination_chat_id=ticket.reporter_id,
             destination_message_id=destination_message_id,
-            text=message.text or message.caption,
+            text=text or message.text or message.caption,
+            relay_method=relay_method,
             delivery_status="sent",
         )
         await message.reply("Sent to reporter.")
@@ -148,13 +240,25 @@ async def _relay_reporter_message(
     team_group_id: int,
     ticket: Ticket,
     text: str | None,
-) -> None:
-    delivered = await bot.copy_message(
-        chat_id=team_group_id,
-        from_chat_id=reporter_id,
-        message_id=source_message_id,
-        message_thread_id=ticket.topic_id,
-    )
+) -> int | None:
+    try:
+        delivered = await bot.copy_message(
+            chat_id=team_group_id,
+            from_chat_id=reporter_id,
+            message_id=source_message_id,
+            message_thread_id=ticket.topic_id,
+        )
+    except TelegramAPIError:
+        return repository.record_message(
+            ticket_number=ticket.number,
+            direction="reporter_to_team",
+            source_chat_id=reporter_id,
+            source_message_id=source_message_id,
+            destination_chat_id=team_group_id,
+            destination_message_id=None,
+            text=text,
+            delivery_status="failed",
+        )
     repository.record_message(
         ticket_number=ticket.number,
         direction="reporter_to_team",
@@ -165,3 +269,4 @@ async def _relay_reporter_message(
         text=text,
         delivery_status="sent",
     )
+    return None

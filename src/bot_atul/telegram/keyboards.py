@@ -69,3 +69,13 @@ def fix_confirmation(ticket_number: int) -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def reporter_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
+    if ticket.status != "Open" or ticket.assignee_id is not None:
+        return None
+    return action("Cancel Ticket", f"ticket:cancel:{ticket.number}")
+
+
+def retry_delivery(message_id: int) -> InlineKeyboardMarkup:
+    return action("Retry Delivery", f"relay:retry:{message_id}")

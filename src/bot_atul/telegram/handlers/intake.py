@@ -6,7 +6,12 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from bot_atul.db.repositories import Repository
 from bot_atul.services.tickets import IntakeSession, IntakeStep
 from bot_atul.services.topics import create_ticket_topic
-from bot_atul.telegram.keyboards import action, choices, review_actions
+from bot_atul.telegram.keyboards import (
+    action,
+    choices,
+    reporter_ticket_actions,
+    review_actions,
+)
 
 URGENCIES = ("Low", "Normal", "High", "Critical")
 
@@ -109,7 +114,11 @@ def build_intake_router(repository: Repository, team_group_id: int) -> Router:
                 ticket = session.confirm(repository)
                 await create_ticket_topic(query.bot, repository, team_group_id, ticket)
                 sessions.pop(query.from_user.id, None)
-                await _edit(query, f"Ticket #{ticket.number} submitted successfully.")
+                await _edit(
+                    query,
+                    f"Ticket #{ticket.number} submitted successfully.",
+                    reporter_ticket_actions(ticket),
+                )
             elif data == "intake:cancel":
                 session.cancel()
                 sessions.pop(query.from_user.id, None)

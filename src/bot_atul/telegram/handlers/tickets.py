@@ -23,6 +23,8 @@ def build_ticket_router(repository: Repository, team_group_id: int) -> Router:
         try:
             if action == "assign":
                 ticket = workflow.assign_to_me(number, query.from_user.id)
+            elif action == "cancel":
+                ticket = workflow.cancel(number, query.from_user.id)
             elif action in {"confirm", "reject"}:
                 ticket = workflow.confirm_fix(
                     number, query.from_user.id, fixed=action == "confirm"

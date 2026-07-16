@@ -61,3 +61,22 @@ def test_permissions_and_invalid_transitions_are_rejected(
         service.change_status(number, 20, "fix")
     with pytest.raises(PermissionError):
         service.confirm_fix(number, 99, fixed=True)
+
+
+def test_reporter_cancels_only_open_unassigned_ticket(
+    workflow: tuple[Repository, TicketWorkflow, int],
+) -> None:
+    _, service, number = workflow
+
+    cancelled = service.cancel(number, 10)
+    assert cancelled.status == "Closed"
+
+
+def test_assigned_ticket_cannot_be_cancelled(
+    workflow: tuple[Repository, TicketWorkflow, int],
+) -> None:
+    _, service, number = workflow
+    service.assign_to_me(number, 20)
+
+    with pytest.raises(ValueError, match="unassigned"):
+        service.cancel(number, 10)
