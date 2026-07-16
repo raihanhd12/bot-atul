@@ -85,16 +85,21 @@ async def render_dashboard_card(
         return
     names = await ticket_names(bot, repository, ticket)
     attachments = repository.list_attachments(ticket.number)
-    await bot.edit_message_text(
-        chat_id=team_group_id,
-        message_id=message_id,
-        text=ticket_card(
-            ticket, names=names, detailed=detailed, attachments=attachments
-        ),
-        reply_markup=dashboard_ticket_actions(
-            ticket, detailed=detailed, attachments=attachments
-        ),
-    )
+    try:
+        await bot.edit_message_text(
+            chat_id=team_group_id,
+            message_id=message_id,
+            text=ticket_card(
+                ticket, names=names, detailed=detailed, attachments=attachments
+            ),
+            reply_markup=dashboard_ticket_actions(
+                ticket, detailed=detailed, attachments=attachments
+            ),
+        )
+    except TelegramAPIError as error:
+        # Same text/markup is fine (e.g. Clear preview keeps details open).
+        if "message is not modified" not in str(error).lower():
+            raise
 
 
 async def publish_topic_attachment(

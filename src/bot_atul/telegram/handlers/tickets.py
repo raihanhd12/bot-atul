@@ -211,6 +211,16 @@ async def _toggle_topic_detail(
             bot, repository, team_group_id, dashboard_topic_id, ticket
         )
 
+    # Clear preview: only remove temporary file messages; keep the card as-is.
+    if clear_files and not collapse:
+        removed = await hide_topic_attachments(
+            bot, repository, team_group_id, ticket
+        )
+        await query.answer(
+            f"Cleared {removed} preview(s)" if removed else "No preview open"
+        )
+        return
+
     show_detailed = detailed and not collapse
     try:
         await render_dashboard_card(
@@ -220,18 +230,13 @@ async def _toggle_topic_detail(
         await query.answer("Could not update the topic card.", show_alert=True)
         return
 
-    if clear_files:
+    if clear_files and collapse:
         removed = await hide_topic_attachments(
             bot, repository, team_group_id, ticket
         )
-        if collapse:
-            await query.answer(
-                f"Hidden · cleared {removed} preview(s)" if removed else "Summary"
-            )
-        else:
-            await query.answer(
-                f"Cleared {removed} preview(s)" if removed else "No preview open"
-            )
+        await query.answer(
+            f"Hidden · cleared {removed} preview(s)" if removed else "Summary"
+        )
         return
 
     # View Details only expands the card + file buttons (no auto bulk dump).
