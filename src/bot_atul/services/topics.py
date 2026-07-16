@@ -6,6 +6,7 @@ from bot_atul.telegram.formatting import (
     ticket_card,
     topic_title,
 )
+from bot_atul.telegram.keyboards import ticket_actions
 
 
 async def create_ticket_topic(
@@ -24,6 +25,7 @@ async def create_ticket_topic(
             chat_id=team_group_id,
             message_thread_id=topic_id,
             text=ticket_card(ticket),
+            reply_markup=ticket_actions(ticket),
         )
         repository.attach_card(ticket.number, int(card.message_id))
         chunks = description_chunks(ticket.description)

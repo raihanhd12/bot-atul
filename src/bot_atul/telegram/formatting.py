@@ -17,6 +17,7 @@ def ticket_card(ticket: Ticket) -> str:
         f"Service: {ticket.service_name}\n"
         f"Urgency: {ticket.urgency}\n"
         f"Status: {ticket.status}\n"
+        f"Assignee: {ticket.assignee_id or '—'}\n"
         f"Reporter: {ticket.reporter_id}\n"
         f"Title: {ticket.title}"
     )

@@ -10,6 +10,7 @@ from bot_atul.db.repositories import Repository
 from bot_atul.telegram.handlers.admin import build_admin_router
 from bot_atul.telegram.handlers.intake import build_intake_router
 from bot_atul.telegram.handlers.relay import build_relay_router
+from bot_atul.telegram.handlers.tickets import build_ticket_router
 
 
 async def run() -> None:
@@ -28,6 +29,7 @@ async def run() -> None:
     dispatcher.include_router(build_admin_router(repository))
     dispatcher.include_router(build_intake_router(repository, config.team_group_id))
     dispatcher.include_router(build_relay_router(repository, config.team_group_id))
+    dispatcher.include_router(build_ticket_router(repository, config.team_group_id))
     try:
         await dispatcher.start_polling(bot)
     finally:
