@@ -1,0 +1,38 @@
+[project]
+name = "bot-atul"
+version = "0.1.0"
+description = "Private Telegram issue-management bot"
+requires-python = ">=3.12,<4.0"
+dependencies = [
+  "aiogram>=3.20,<4",
+  "openpyxl>=3.1,<4",
+]
+
+[tool.poetry]
+packages = [{ include = "bot_atul", from = "src" }]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.4"
+pytest-asyncio = "^1.0"
+ruff = "^0.12"
+mypy = "^1.16"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+packages = ["bot_atul"]
+
+[build-system]
+requires = ["poetry-core>=2.0"]
+build-backend = "poetry.core.masonry.api"
