@@ -80,3 +80,78 @@ class Repository:
         except sqlite3.IntegrityError:
             return False
         return True
+
+    def upsert_user(self, telegram_id: int, role: str) -> None:
+        if role not in {"reporter", "agent", "admin"}:
+            raise ValueError(f"Invalid role: {role}")
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO users(telegram_id, role, enabled) VALUES (?, ?, 1)
+                ON CONFLICT(telegram_id) DO UPDATE SET role = excluded.role, enabled = 1
+                """,
+                (telegram_id, role),
+            )
+
+    def disable_user(self, telegram_id: int) -> bool:
+        with self.connection:
+            cursor = self.connection.execute(
+                "UPDATE users SET enabled = 0 WHERE telegram_id = ?", (telegram_id,)
+            )
+        return cursor.rowcount == 1
+
+    def get_role(self, telegram_id: int) -> str | None:
+        row = self.connection.execute(
+            "SELECT role FROM users WHERE telegram_id = ? AND enabled = 1",
+            (telegram_id,),
+        ).fetchone()
+        return str(row[0]) if row else None
+
+    def list_services(self) -> list[str]:
+        rows = self.connection.execute(
+            "SELECT name FROM services WHERE enabled = 1 ORDER BY position, id"
+        ).fetchall()
+        return [str(row[0]) for row in rows]
+
+    def add_service(self, name: str) -> None:
+        position = self.connection.execute(
+            "SELECT COALESCE(MAX(position), -1) + 1 FROM services"
+        ).fetchone()[0]
+        with self.connection:
+            self.connection.execute(
+                "INSERT INTO services(name, position) VALUES (?, ?)", (name, position)
+            )
+
+    def rename_service(self, old_name: str, new_name: str) -> bool:
+        with self.connection:
+            cursor = self.connection.execute(
+                "UPDATE services SET name = ? WHERE name = ? AND enabled = 1",
+                (new_name, old_name),
+            )
+        return cursor.rowcount == 1
+
+    def disable_service(self, name: str) -> bool:
+        with self.connection:
+            cursor = self.connection.execute(
+                "UPDATE services SET enabled = 0 WHERE name = ? AND enabled = 1",
+                (name,),
+            )
+        return cursor.rowcount == 1
+
+    def move_service(self, name: str, position: int) -> bool:
+        if position < 1:
+            raise ValueError("Position must be at least 1")
+        row = self.connection.execute(
+            "SELECT id FROM services WHERE name = ? AND enabled = 1", (name,)
+        ).fetchone()
+        if row is None:
+            return False
+        with self.connection:
+            self.connection.execute(
+                "UPDATE services SET position = position + 1 WHERE position >= ?",
+                (position - 1,),
+            )
+            self.connection.execute(
+                "UPDATE services SET position = ? WHERE id = ?", (position - 1, row[0])
+            )
+        return True
