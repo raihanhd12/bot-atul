@@ -85,6 +85,13 @@ CREATE TABLE IF NOT EXISTS ticket_dashboard_cards (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS ticket_topic_attachments (
+    attachment_id INTEGER PRIMARY KEY REFERENCES attachments(id),
+    ticket_number INTEGER NOT NULL REFERENCES tickets(number),
+    message_id INTEGER NOT NULL,
+    posted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS status_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ticket_number INTEGER NOT NULL REFERENCES tickets(number),

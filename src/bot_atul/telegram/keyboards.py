@@ -1,6 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot_atul.db.repositories import Ticket
+from bot_atul.db.repositories import AttachmentRecord, Ticket
 
 
 def choices(prefix: str, values: tuple[str, ...]) -> InlineKeyboardMarkup:
@@ -28,20 +28,45 @@ def review_actions() -> InlineKeyboardMarkup:
 
 
 def dashboard_ticket_actions(
-    ticket: Ticket, *, detailed: bool = False
+    ticket: Ticket,
+    *,
+    detailed: bool = False,
+    attachments: list[AttachmentRecord] | None = None,
 ) -> InlineKeyboardMarkup:
-    """Topic cards are view-only for the team: expand/collapse details."""
+    """Topic cards are view-only: expand details and open attachments."""
+    files = attachments or []
+    rows: list[list[InlineKeyboardButton]] = []
     if detailed:
-        button = InlineKeyboardButton(
-            text="▲ Hide Details",
-            callback_data=f"ticket:summary:{ticket.number}",
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="▲ Hide Details",
+                    callback_data=f"ticket:summary:{ticket.number}",
+                )
+            ]
         )
+        if files:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"📎 Show {len(files)} file(s) in topic",
+                        callback_data=f"ticket:files:{ticket.number}",
+                    )
+                ]
+            )
     else:
-        button = InlineKeyboardButton(
-            text="📄 View Details",
-            callback_data=f"ticket:detail:{ticket.number}",
+        label = "📄 View Details"
+        if files:
+            label = f"📄 View Details · {len(files)} file(s)"
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=label,
+                    callback_data=f"ticket:detail:{ticket.number}",
+                )
+            ]
         )
-    return InlineKeyboardMarkup(inline_keyboard=[[button]])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def agent_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup:
@@ -157,5 +182,21 @@ def dashboard_actions() -> InlineKeyboardMarkup:
                     text="Export Excel", callback_data="dashboard:export"
                 ),
             ]
+        ]
+    )
+
+
+def reminder_actions() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📋 My Tickets", callback_data="menu:tickets"
+                ),
+                InlineKeyboardButton(
+                    text="📝 Report Issue", callback_data="menu:report"
+                ),
+            ],
+            [InlineKeyboardButton(text="🏠 Menu", callback_data="menu:home")],
         ]
     )

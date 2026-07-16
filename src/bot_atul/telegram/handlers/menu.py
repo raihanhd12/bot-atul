@@ -151,8 +151,11 @@ def build_menu_router(repository: Repository, reminder_time: time) -> Router:
             await _edit(
                 query,
                 "⏰ Reminder Schedule\n\n"
-                f"Monday–Friday at {reminder_time.strftime('%H:%M')}.\n"
-                "The bot sends a reminder only when unresolved tickets exist.\n\n"
+                f"Monday–Friday at {reminder_time.strftime('%H:%M')}.\n\n"
+                "When open issues exist, the bot:\n"
+                "• DMs each person with their own tickets "
+                '(e.g. "Hi Raihan, you still have open issues…")\n'
+                "• Posts a short team summary in the issues topic\n\n"
                 "Change REMINDER_TIME in .env and restart the bot to update it.",
                 back_button("admin:home"),
             )

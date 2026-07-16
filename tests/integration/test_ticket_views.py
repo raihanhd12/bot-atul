@@ -119,3 +119,38 @@ async def test_assignment_workspace_and_pending_message_are_private(
     assert bot.attachments[0]["chat_id"] == 20
     assert bot.copies[0]["chat_id"] == 20
     assert repository.get_relay_message(pending_id).delivery_status == "sent"  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+async def test_view_details_posts_multiple_attachments_in_topic(
+    repository: Repository,
+) -> None:
+    from bot_atul.services.topics import publish_topic_attachments
+
+    ticket = repository.create_ticket(
+        reporter_id=10,
+        service_name="Technical",
+        urgency="High",
+        title="Crash with logs",
+        description="See attachments",
+        attachments=(
+            ("photo", "photo-1", None, "screen one"),
+            ("photo", "photo-2", None, "screen two"),
+            ("document", "doc-1", "trace.pdf", None),
+        ),
+    )
+    bot = FakeBot()
+    await create_ticket_card(bot, repository, -1001, 24, ticket)
+
+    posted = await publish_topic_attachments(bot, repository, -1001, 24, ticket)
+    assert posted == 3
+    assert len(bot.attachments) == 3
+    assert bot.attachments[0]["photo"] == "photo-1"
+    assert bot.attachments[1]["photo"] == "photo-2"
+    assert bot.attachments[2]["document"] == "doc-1"
+    assert all(item["message_thread_id"] == 24 for item in bot.attachments)
+    assert all(item["reply_to_message_id"] == 1 for item in bot.attachments)
+
+    # Second open does not spam duplicates.
+    assert await publish_topic_attachments(bot, repository, -1001, 24, ticket) == 0
+    assert len(bot.attachments) == 3

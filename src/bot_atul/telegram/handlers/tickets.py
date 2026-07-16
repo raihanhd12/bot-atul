@@ -12,6 +12,7 @@ from bot_atul.services.topics import (
     create_agent_workspace,
     create_ticket_card,
     deliver_pending_reporter_messages,
+    publish_topic_attachments,
     render_dashboard_card,
     ticket_names,
 )
@@ -40,7 +41,7 @@ def build_ticket_router(
         number = int(number_text)
         actor_id = query.from_user.id
 
-        if action in {"detail", "summary"}:
+        if action in {"detail", "summary", "files"}:
             await _toggle_topic_detail(
                 query,
                 bot,
@@ -48,7 +49,8 @@ def build_ticket_router(
                 team_group_id,
                 dashboard_topic_id,
                 number,
-                detailed=action == "detail",
+                detailed=action != "summary",
+                publish_files=action in {"detail", "files"},
             )
             return
 
@@ -132,6 +134,7 @@ async def _toggle_topic_detail(
     number: int,
     *,
     detailed: bool,
+    publish_files: bool = False,
 ) -> None:
     if repository.get_role(query.from_user.id) not in {"agent", "admin"}:
         await query.answer("Team access required.", show_alert=True)
@@ -151,7 +154,18 @@ async def _toggle_topic_detail(
     except TelegramAPIError:
         await query.answer("Could not update the topic card.", show_alert=True)
         return
-    await query.answer("Details" if detailed else "Summary")
+    posted = 0
+    if publish_files:
+        posted = await publish_topic_attachments(
+            bot, repository, team_group_id, dashboard_topic_id, ticket
+        )
+    if publish_files and repository.count_attachments(number):
+        if posted:
+            await query.answer(f"Posted {posted} file(s) in the topic")
+        else:
+            await query.answer("Attachments already in the topic")
+    else:
+        await query.answer("Details" if detailed else "Summary")
 
 
 async def _refresh_ticket(
@@ -178,10 +192,13 @@ async def _refresh_ticket(
     workspace = repository.get_agent_workspace(ticket.number)
     if workspace is not None:
         names = await ticket_names(bot, repository, ticket)
+        attachments = repository.list_attachments(ticket.number)
         with suppress(TelegramAPIError):
             await bot.edit_message_text(
                 chat_id=workspace.agent_id,
                 message_id=workspace.message_id,
-                text=agent_workspace(ticket, names=names)[:4_096],
+                text=agent_workspace(
+                    ticket, names=names, attachments=attachments
+                )[:4_096],
                 reply_markup=agent_ticket_actions(ticket),
             )

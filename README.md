@@ -141,8 +141,12 @@ ADMIN_IDS=123456789,987654321
 
 Never commit `.env`. It is ignored by Git.
 
-`REMINDER_TIME` accepts one local 24-hour time. The bot sends a reminder
-Monday through Friday only when Open or In Progress tickets exist.
+`REMINDER_TIME` accepts one local 24-hour time. Monday through Friday, when
+Open or In Progress tickets exist, the bot:
+
+- DMs each person who still has issues (friendly personal reminder with their
+  ticket list);
+- posts a short team summary in the issues dashboard topic.
 
 ## Docker Deployment
 
@@ -285,7 +289,9 @@ Each ticket appears as a polished view-only card in the shared dashboard topic:
 - status and urgency icons (for example ✅ Closed, 🚨 Critical);
 - display names and `@username` instead of raw Telegram IDs;
 - **View Details / Hide Details** so the whole team can expand the description
-  in the topic.
+  in the topic;
+- multiple attachments (photos, PDFs, documents) posted under the card when
+  details are opened, so the team can open files in the issues topic.
 
 No assign or close buttons appear in the group.
 

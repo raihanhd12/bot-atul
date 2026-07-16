@@ -47,6 +47,15 @@ class AgentWorkspace:
     message_id: int
 
 
+@dataclass(frozen=True)
+class AttachmentRecord:
+    id: int
+    kind: str
+    file_id: str
+    file_name: str | None
+    caption: str | None
+
+
 class Repository:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
@@ -177,17 +186,54 @@ class Repository:
         ).fetchone()
         return AgentWorkspace(**dict(row)) if row else None
 
-    def list_attachments(
-        self, number: int
-    ) -> list[tuple[str, str, str | None, str | None]]:
+    def list_attachments(self, number: int) -> list[AttachmentRecord]:
         rows = self.connection.execute(
             """
-            SELECT kind, telegram_file_id, file_name, caption
+            SELECT id, kind, telegram_file_id, file_name, caption
             FROM attachments WHERE ticket_number = ? ORDER BY id
             """,
             (number,),
         ).fetchall()
-        return [(str(row[0]), str(row[1]), row[2], row[3]) for row in rows]
+        return [
+            AttachmentRecord(
+                id=int(row[0]),
+                kind=str(row[1]),
+                file_id=str(row[2]),
+                file_name=row[3],
+                caption=row[4],
+            )
+            for row in rows
+        ]
+
+    def count_attachments(self, number: int) -> int:
+        row = self.connection.execute(
+            "SELECT COUNT(*) FROM attachments WHERE ticket_number = ?",
+            (number,),
+        ).fetchone()
+        return int(row[0])
+
+    def is_topic_attachment_posted(self, attachment_id: int) -> bool:
+        row = self.connection.execute(
+            "SELECT 1 FROM ticket_topic_attachments WHERE attachment_id = ?",
+            (attachment_id,),
+        ).fetchone()
+        return row is not None
+
+    def save_topic_attachment(
+        self, ticket_number: int, attachment_id: int, message_id: int
+    ) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT INTO ticket_topic_attachments(
+                    attachment_id, ticket_number, message_id
+                ) VALUES (?, ?, ?)
+                ON CONFLICT(attachment_id) DO UPDATE SET
+                    message_id = excluded.message_id,
+                    posted_at = CURRENT_TIMESTAMP
+                """,
+                (attachment_id, ticket_number, message_id),
+            )
 
     def count_tickets(self) -> int:
         row = self.connection.execute("SELECT COUNT(*) FROM tickets").fetchone()

@@ -33,11 +33,33 @@ def test_ticket_round_trip_preserves_long_description(repository: Repository) ->
     assert stored.description == description
     assert stored.service_name == "Technical"
     assert stored.status == "Open"
-    attachment = repository.connection.execute(
-        "SELECT telegram_file_id, file_name FROM attachments WHERE ticket_number = ?",
-        (ticket.number,),
-    ).fetchone()
-    assert tuple(attachment) == ("file-1", "trace.txt")
+    attachments = repository.list_attachments(ticket.number)
+    assert len(attachments) == 1
+    assert attachments[0].file_id == "file-1"
+    assert attachments[0].file_name == "trace.txt"
+    assert attachments[0].kind == "document"
+
+
+def test_ticket_stores_multiple_attachments(repository: Repository) -> None:
+    ticket = repository.create_ticket(
+        reporter_id=10,
+        service_name="Technical",
+        urgency="High",
+        title="Many files",
+        description="Details",
+        attachments=(
+            ("photo", "photo-a", None, "one"),
+            ("document", "doc-b", "notes.pdf", None),
+            ("photo", "photo-c", None, None),
+        ),
+    )
+
+    attachments = repository.list_attachments(ticket.number)
+    assert [item.kind for item in attachments] == ["photo", "document", "photo"]
+    assert repository.count_attachments(ticket.number) == 3
+    repository.save_topic_attachment(ticket.number, attachments[0].id, 501)
+    assert repository.is_topic_attachment_posted(attachments[0].id) is True
+    assert repository.is_topic_attachment_posted(attachments[1].id) is False
 
 
 def test_processed_update_is_claimed_once(repository: Repository) -> None:

@@ -1,4 +1,4 @@
-from bot_atul.db.repositories import Ticket
+from bot_atul.db.repositories import AttachmentRecord, Ticket
 from bot_atul.telegram.formatting import description_chunks, ticket_card
 
 
@@ -35,18 +35,45 @@ def test_ticket_card_uses_status_icons_and_names() -> None:
 
     assert "✅ Ticket #42 · Closed" in card
     assert "🚨 Urgency   Critical" in card
-    assert "👤 Reported  Raihan (@raihan)" in card
-    assert "🧑‍💻 Owner     Raihan (@raihan)" in card
+    assert "👤 By        Raihan (@raihan)" in card
+    assert "Reported" not in card
+    assert "Owner" not in card
     assert "Agent cannot start" in card
     assert "Detailed failure" not in card
 
 
-def test_ticket_card_detailed_includes_description() -> None:
+def test_ticket_card_by_prefers_assignee_when_set() -> None:
+    card = ticket_card(
+        ticket(assignee_id=20),
+        names={10: "Raihan (@raihan)", 20: "Andi (@andi)"},
+    )
+
+    assert "👤 By        Andi (@andi)" in card
+    assert "Reported" not in card
+    assert "Owner" not in card
+
+
+def test_ticket_card_detailed_includes_description_and_attachments() -> None:
+    attachments = [
+        AttachmentRecord(1, "photo", "p1", None, "screen"),
+        AttachmentRecord(2, "document", "d1", "report.pdf", None),
+    ]
     card = ticket_card(
         ticket(description="Full stack trace here"),
         names={10: "Andi"},
         detailed=True,
+        attachments=attachments,
     )
 
     assert "📝 Details" in card
     assert "Full stack trace here" in card
+    assert "📎 Attachments  2" in card
+    assert "🖼️ screen" in card
+    assert "📄 report.pdf" in card
+    assert "posted below this card" in card
+
+
+def test_summary_shows_attachment_count() -> None:
+    attachments = [AttachmentRecord(1, "photo", "p1", None, None)]
+    card = ticket_card(ticket(), attachments=attachments)
+    assert "📎 Files     1 attachment(s)" in card

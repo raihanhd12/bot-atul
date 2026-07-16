@@ -3,8 +3,9 @@ from typing import Any
 
 from aiogram.exceptions import TelegramAPIError
 
-from bot_atul.db.repositories import Repository, Ticket
+from bot_atul.db.repositories import AttachmentRecord, Repository, Ticket
 from bot_atul.telegram.formatting import (
+    attachment_label,
     description_chunks,
     ticket_card,
 )
@@ -56,12 +57,13 @@ async def create_ticket_card(
     ticket = repository.get_ticket(ticket.number) or ticket
     message_id = repository.get_dashboard_card(ticket.number)
     names = await ticket_names(bot, repository, ticket)
+    attachments = repository.list_attachments(ticket.number)
     if message_id is None:
         card = await bot.send_message(
             chat_id=team_group_id,
             message_thread_id=dashboard_topic_id,
-            text=ticket_card(ticket, names=names),
-            reply_markup=dashboard_ticket_actions(ticket),
+            text=ticket_card(ticket, names=names, attachments=attachments),
+            reply_markup=dashboard_ticket_actions(ticket, attachments=attachments),
         )
         message_id = int(card.message_id)
         repository.save_dashboard_card(ticket.number, message_id)
@@ -82,12 +84,75 @@ async def render_dashboard_card(
     if message_id is None:
         return
     names = await ticket_names(bot, repository, ticket)
+    attachments = repository.list_attachments(ticket.number)
     await bot.edit_message_text(
         chat_id=team_group_id,
         message_id=message_id,
-        text=ticket_card(ticket, names=names, detailed=detailed),
-        reply_markup=dashboard_ticket_actions(ticket, detailed=detailed),
+        text=ticket_card(
+            ticket, names=names, detailed=detailed, attachments=attachments
+        ),
+        reply_markup=dashboard_ticket_actions(
+            ticket, detailed=detailed, attachments=attachments
+        ),
     )
+
+
+async def publish_topic_attachments(
+    bot: Any,
+    repository: Repository,
+    team_group_id: int,
+    dashboard_topic_id: int,
+    ticket: Ticket,
+) -> int:
+    """Post each attachment under the topic card once (photos, PDFs, docs)."""
+    card_message_id = repository.get_dashboard_card(ticket.number)
+    if card_message_id is None:
+        return 0
+    posted = 0
+    attachments = repository.list_attachments(ticket.number)
+    for index, attachment in enumerate(attachments, start=1):
+        if repository.is_topic_attachment_posted(attachment.id):
+            continue
+        label = attachment_label(attachment, index)
+        caption = f"#{ticket.number} · {label}"
+        if attachment.caption and attachment.caption not in caption:
+            caption = f"{caption}\n{attachment.caption}"
+        try:
+            message = await _send_attachment(
+                bot,
+                chat_id=team_group_id,
+                thread_id=dashboard_topic_id,
+                reply_to=card_message_id,
+                attachment=attachment,
+                caption=caption[:1_024],
+            )
+        except TelegramAPIError:
+            continue
+        repository.save_topic_attachment(
+            ticket.number, attachment.id, int(message.message_id)
+        )
+        posted += 1
+    return posted
+
+
+async def _send_attachment(
+    bot: Any,
+    *,
+    chat_id: int,
+    thread_id: int,
+    reply_to: int,
+    attachment: AttachmentRecord,
+    caption: str,
+) -> Any:
+    common = {
+        "chat_id": chat_id,
+        "message_thread_id": thread_id,
+        "reply_to_message_id": reply_to,
+        "caption": caption,
+    }
+    if attachment.kind == "photo":
+        return await bot.send_photo(photo=attachment.file_id, **common)
+    return await bot.send_document(document=attachment.file_id, **common)
 
 
 async def create_agent_workspace(
@@ -98,10 +163,14 @@ async def create_agent_workspace(
     if workspace is not None and workspace.agent_id == agent_id:
         return workspace.message_id
     names = await ticket_names(bot, repository, assigned)
+    attachments = repository.list_attachments(ticket.number)
     chunks = description_chunks(ticket.description, 3_500)
     card = await bot.send_message(
         chat_id=agent_id,
-        text=f"{ticket_card(assigned, names=names)}\n\n📝 Description\n{chunks[0]}",
+        text=(
+            f"{ticket_card(assigned, names=names, attachments=attachments)}\n\n"
+            f"📝 Description\n{chunks[0]}"
+        ),
         reply_markup=agent_ticket_actions(assigned),
     )
     repository.save_agent_workspace(ticket.number, agent_id, int(card.message_id))
@@ -113,11 +182,21 @@ async def create_agent_workspace(
             )
         except TelegramAPIError:
             break
-    attachments = repository.list_attachments(ticket.number)
-    for kind, file_id, _file_name, caption in attachments:
-        method = bot.send_photo if kind == "photo" else bot.send_document
+    for index, attachment in enumerate(attachments, start=1):
+        label = attachment_label(attachment, index)
         try:
-            await method(chat_id=agent_id, **{kind: file_id}, caption=caption)
+            if attachment.kind == "photo":
+                await bot.send_photo(
+                    chat_id=agent_id,
+                    photo=attachment.file_id,
+                    caption=attachment.caption or label,
+                )
+            else:
+                await bot.send_document(
+                    chat_id=agent_id,
+                    document=attachment.file_id,
+                    caption=attachment.caption or label,
+                )
         except TelegramAPIError:
             continue
     return int(card.message_id)
