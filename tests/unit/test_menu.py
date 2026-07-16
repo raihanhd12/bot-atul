@@ -1,6 +1,11 @@
 from bot_atul.db.repositories import Ticket
-from bot_atul.telegram.keyboards import dashboard_ticket_actions
+from bot_atul.telegram.keyboards import (
+    admin_open_ticket_actions,
+    agent_ticket_actions,
+    dashboard_ticket_actions,
+)
 from bot_atul.telegram.menu import (
+    admin_menu,
     main_menu,
     service_actions,
     service_disable_confirmation,
@@ -93,6 +98,49 @@ def test_dashboard_cards_are_view_only() -> None:
 
     assert dashboard_ticket_actions(open_ticket) is None
     assert dashboard_ticket_actions(closed_ticket) is None
+
+
+def test_self_owned_workspace_hides_reply_to_reporter() -> None:
+    ticket = Ticket(
+        number=1,
+        reporter_id=10,
+        service_name="General",
+        urgency="Normal",
+        title="Mine",
+        description="Details",
+        status="Open",
+        topic_id=None,
+        card_message_id=None,
+        assignee_id=10,
+    )
+    labels = _keyboard_labels(agent_ticket_actions(ticket))
+    assert "Reply to Reporter" not in labels
+    assert "Start Work" in labels
+    assert "Close" in labels
+
+
+def test_admin_menu_includes_open_tickets() -> None:
+    labels = [
+        button.text for row in admin_menu().inline_keyboard for button in row
+    ]
+    assert "📂 Open Tickets" in labels
+
+
+def test_admin_open_ticket_actions_offer_close() -> None:
+    ticket = Ticket(
+        number=3,
+        reporter_id=10,
+        service_name="General",
+        urgency="High",
+        title="Broken deploy",
+        description="Details",
+        status="In Progress",
+        topic_id=None,
+        card_message_id=None,
+        assignee_id=10,
+    )
+    labels = _keyboard_labels(admin_open_ticket_actions([ticket]))
+    assert any(label.startswith("Close #3") for label in labels)
 
 
 def _keyboard_labels(menu: object) -> list[str]:

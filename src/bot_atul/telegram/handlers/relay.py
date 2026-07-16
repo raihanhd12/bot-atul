@@ -35,6 +35,12 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
                 "Only the assigned agent can reply.", show_alert=True
             )
             return
+        if ticket.reporter_id == query.from_user.id:
+            await query.answer(
+                "This ticket is yours — no separate reporter to message.",
+                show_alert=True,
+            )
+            return
         pending_agent_replies[query.from_user.id] = number
         await query.answer()
         if isinstance(query.message, Message):
@@ -57,6 +63,12 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
         ):
             pending_agent_replies.pop(message.from_user.id, None)
             await message.answer("That ticket reply is no longer available.")
+            return
+        if ticket.reporter_id == message.from_user.id:
+            pending_agent_replies.pop(message.from_user.id, None)
+            await message.answer(
+                "This ticket is yours — no separate reporter to message."
+            )
             return
         bot = message.bot
         if bot is None:
@@ -136,6 +148,10 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
             await message.answer(
                 f"Added to ticket #{tickets[0].number}. The assigned agent will "
                 "receive it."
+            )
+        elif tickets[0].assignee_id == message.from_user.id:
+            await message.answer(
+                f"Saved on ticket #{tickets[0].number}."
             )
         elif failed_id is None:
             await message.answer(f"Added to ticket #{tickets[0].number}.")
@@ -298,6 +314,19 @@ async def _relay_reporter_message(
             text=text,
             delivery_status="pending",
         )
+    # Self-owned tickets: store a note, do not echo the message back to the owner.
+    if ticket.assignee_id == reporter_id:
+        repository.record_message(
+            ticket_number=ticket.number,
+            direction="internal",
+            source_chat_id=reporter_id,
+            source_message_id=source_message_id,
+            destination_chat_id=reporter_id,
+            destination_message_id=source_message_id,
+            text=text,
+            delivery_status="sent",
+        )
+        return None
     try:
         await bot.send_message(
             chat_id=ticket.assignee_id,

@@ -14,6 +14,7 @@ TRANSITIONS = {
     (TicketStatus.IN_PROGRESS, "fix"): TicketStatus.FIXED,
     (TicketStatus.IN_PROGRESS, "close"): TicketStatus.CLOSED,
     (TicketStatus.FIXED, "confirm"): TicketStatus.CLOSED,
+    (TicketStatus.FIXED, "close"): TicketStatus.CLOSED,
     (TicketStatus.FIXED, "reject"): TicketStatus.OPEN,
     (TicketStatus.FIXED, "reopen"): TicketStatus.OPEN,
     (TicketStatus.CLOSED, "reopen"): TicketStatus.OPEN,

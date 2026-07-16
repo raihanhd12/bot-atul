@@ -23,15 +23,25 @@ class TicketWorkflow:
             number, ticket.status, new_status, actor_id
         )
 
-    def confirm_fix(self, number: int, reporter_id: int, *, fixed: bool) -> Ticket:
+    def mark_fixed(self, number: int, actor_id: int) -> Ticket:
+        """Mark fixed; self-owned tickets close immediately (no self-confirmation)."""
+        ticket = self.change_status(number, actor_id, "fix")
+        if ticket.reporter_id == actor_id:
+            return self.confirm_fix(number, actor_id, fixed=True)
+        return ticket
+
+    def confirm_fix(self, number: int, actor_id: int, *, fixed: bool) -> Ticket:
         ticket = self._ticket(number)
-        if ticket.reporter_id != reporter_id:
-            raise PermissionError("Only the ticket reporter can confirm the fix.")
+        role = self.repository.get_role(actor_id)
+        if ticket.reporter_id != actor_id and role != "admin":
+            raise PermissionError("Only the ticket owner or an admin can confirm.")
         action = "confirm" if fixed else "reject"
         new_status = transition(TicketStatus(ticket.status), action)
-        reason = "Reporter confirmed" if fixed else "Reporter says still broken"
+        reason = "Owner confirmed" if fixed else "Owner says still broken"
+        if role == "admin" and ticket.reporter_id != actor_id:
+            reason = "Admin confirmed" if fixed else "Admin reopened"
         return self.repository.update_status(
-            number, ticket.status, new_status, reporter_id, reason
+            number, ticket.status, new_status, actor_id, reason
         )
 
     def cancel(self, number: int, actor_id: int) -> Ticket:

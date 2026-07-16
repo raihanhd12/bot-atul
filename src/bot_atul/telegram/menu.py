@@ -44,8 +44,11 @@ def admin_menu() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text="📂 Open Tickets", callback_data="admin:open_tickets"
+                ),
+                InlineKeyboardButton(
                     text="⏰ Reminder", callback_data="admin:reminder"
-                )
+                ),
             ],
             [
                 InlineKeyboardButton(

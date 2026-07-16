@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from bot_atul.db.repositories import Repository, UserRecord
 from bot_atul.telegram.handlers.intake import begin_intake
+from bot_atul.telegram.keyboards import admin_open_ticket_actions
 from bot_atul.telegram.menu import (
     admin_menu,
     back_button,
@@ -24,14 +25,13 @@ from bot_atul.telegram.menu import (
 
 HELP_TEXT = (
     "Create an issue with Report Issue. Use My Tickets to view your active "
-    "tickets. The bot opens a private workspace for you after submit and "
-    "notifies you about status changes."
+    "tickets. After submit, the bot auto-assigns the ticket to you and opens "
+    "a private workspace. The group dashboard is view-only."
 )
 TEAM_HELP_TEXT = (
-    "Reporting auto-assigns the ticket to you and opens a private workspace. "
-    "The group dashboard topic is view-only. Use status buttons and Reply to "
-    "Reporter from your private ticket workspace. Admins can cancel or close "
-    "tickets as needed."
+    "Report opens a private workspace for you — no Assign to Me in the group. "
+    "Use Start Work, Mark Fixed, and Close from that private chat. "
+    "Admins can close any open ticket from Admin Panel → Open Tickets."
 )
 HINTS = {
     "user_add": "/user_add <telegram_id> <agent|admin>",
@@ -130,6 +130,22 @@ def build_menu_router(repository: Repository, reminder_time: time) -> Router:
                 "👥 Team Members\n\n"
                 + _format_users(repository.list_users(("admin", "agent"))),
                 user_menu(),
+            )
+        elif action == "open_tickets":
+            closable = repository.closable_tickets()
+            text = (
+                "\n".join(
+                    f"#{ticket.number} · {ticket.status} · "
+                    f"{ticket.service_name} · {ticket.title}"
+                    for ticket in closable
+                )
+                if closable
+                else "No open tickets."
+            )
+            await _edit(
+                query,
+                f"📂 Open Tickets\n\n{text}",
+                admin_open_ticket_actions(closable),
             )
         elif action == "reminder":
             await _edit(

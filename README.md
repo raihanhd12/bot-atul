@@ -35,13 +35,17 @@ Open -> In Progress -> Fixed -> Closed
   +--------- Reopen --------+
 ```
 
-When a ticket is marked Fixed, the original submitter receives:
+When someone else marks a ticket Fixed, the original submitter receives:
 
 - **Yes, fixed** — closes the ticket
 - **No, still broken** — reopens the ticket
 
-An owner may cancel an Open ticket assigned to themselves. Admins may cancel any
-Open ticket.
+Self-owned tickets (normal after auto-assign) skip that confirmation: **Mark
+Fixed** closes immediately. Extra private messages on a self-owned ticket are
+saved as notes, not echoed back.
+
+An owner may cancel an Open ticket assigned to themselves. Admins may close any
+Open, In Progress, or Fixed ticket from **Admin Panel → Open Tickets**.
 
 ## Project Structure
 

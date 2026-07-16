@@ -39,35 +39,37 @@ def build_ticket_router(
             return
         _, action, number_text = query.data.split(":", 2)
         number = int(number_text)
+        actor_id = query.from_user.id
         try:
             if action == "assign":
+                # Legacy unassigned tickets only; normal reports auto-assign.
                 current = repository.get_ticket(number)
                 if current is None:
                     raise ValueError(f"Unknown ticket: {number}")
-                if repository.get_role(query.from_user.id) not in {"agent", "admin"}:
+                if repository.get_role(actor_id) not in {"agent", "admin"}:
                     raise PermissionError("Agent access required.")
-                if current.assignee_id not in {None, query.from_user.id}:
+                if current.assignee_id not in {None, actor_id}:
                     raise ValueError("Ticket is already assigned.")
                 try:
-                    await create_agent_workspace(
-                        bot, repository, current, query.from_user.id
-                    )
+                    await create_agent_workspace(bot, repository, current, actor_id)
                 except TelegramAPIError:
                     await query.answer(
-                        "Open this bot in private, press Start, then assign again.",
+                        "Open this bot in private, press Start, then try again.",
                         show_alert=True,
                     )
                     return
-                ticket = workflow.assign_to_me(number, query.from_user.id)
+                ticket = workflow.assign_to_me(number, actor_id)
                 await deliver_pending_reporter_messages(bot, repository, ticket)
             elif action == "cancel":
-                ticket = workflow.cancel(number, query.from_user.id)
+                ticket = workflow.cancel(number, actor_id)
             elif action in {"confirm", "reject"}:
                 ticket = workflow.confirm_fix(
-                    number, query.from_user.id, fixed=action == "confirm"
+                    number, actor_id, fixed=action == "confirm"
                 )
+            elif action == "fix":
+                ticket = workflow.mark_fixed(number, actor_id)
             else:
-                ticket = workflow.change_status(number, query.from_user.id, action)
+                ticket = workflow.change_status(number, actor_id, action)
         except (PermissionError, ValueError) as error:
             await query.answer(str(error), show_alert=True)
             return
@@ -86,16 +88,24 @@ def build_ticket_router(
             dashboard_topic_id,
             datetime.now(timezone),
         )
-        if action == "fix":
-            await bot.send_message(
-                ticket.reporter_id,
-                f"Ticket #{number} was marked Fixed. Is the problem solved?",
-                reply_markup=fix_confirmation(number),
-            )
-        elif action not in {"assign", "confirm", "reject"}:
-            await bot.send_message(
-                ticket.reporter_id, f"Ticket #{number} is now {ticket.status}."
-            )
+        # Never DM the actor about their own action (self-owned tickets).
+        if ticket.reporter_id != actor_id:
+            if action == "fix" and ticket.status == "Fixed":
+                await bot.send_message(
+                    ticket.reporter_id,
+                    f"Ticket #{number} was marked Fixed. Is the problem solved?",
+                    reply_markup=fix_confirmation(number),
+                )
+            elif action not in {"assign", "confirm", "reject", "fix"}:
+                await bot.send_message(
+                    ticket.reporter_id,
+                    f"Ticket #{number} is now {ticket.status}.",
+                )
+            elif action == "fix" and ticket.status == "Closed":
+                await bot.send_message(
+                    ticket.reporter_id,
+                    f"Ticket #{number} is now Closed.",
+                )
         await query.answer(f"Ticket #{number}: {ticket.status}")
 
     return router

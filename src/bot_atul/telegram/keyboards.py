@@ -34,21 +34,34 @@ def dashboard_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
 
 
 def agent_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup:
+    # Self-owned tickets (auto-assigned on report) have no separate reporter.
+    self_owned = (
+        ticket.assignee_id is not None and ticket.reporter_id == ticket.assignee_id
+    )
     actions: list[tuple[str, str]] = []
     if ticket.status == "Open":
         actions = [
-            ("Reply to Reporter", "reply"),
+            *([] if self_owned else [("Reply to Reporter", "reply")]),
             ("Start Work", "start"),
             ("Close", "close"),
         ]
     elif ticket.status == "In Progress":
         actions = [
-            ("Reply to Reporter", "reply"),
+            *([] if self_owned else [("Reply to Reporter", "reply")]),
             ("Mark Fixed", "fix"),
             ("Close", "close"),
         ]
-    elif ticket.status in {"Fixed", "Closed"}:
-        actions = [("Reply to Reporter", "reply"), ("Reopen", "reopen")]
+    elif ticket.status == "Fixed":
+        actions = [
+            *([] if self_owned else [("Reply to Reporter", "reply")]),
+            ("Close", "close"),
+            ("Reopen", "reopen"),
+        ]
+    elif ticket.status == "Closed":
+        actions = [
+            *([] if self_owned else [("Reply to Reporter", "reply")]),
+            ("Reopen", "reopen"),
+        ]
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -64,6 +77,27 @@ def agent_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup:
             for label, action in actions
         ]
     )
+
+
+def admin_open_ticket_actions(tickets: list[Ticket]) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for ticket in tickets:
+        label = f"#{ticket.number} · {ticket.status} · {ticket.title}"
+        if len(label) > 60:
+            label = label[:57] + "..."
+        if ticket.status in {"Open", "In Progress", "Fixed"}:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"Close {label}",
+                        callback_data=f"ticket:close:{ticket.number}",
+                    )
+                ]
+            )
+    rows.append(
+        [InlineKeyboardButton(text="← Admin Panel", callback_data="admin:home")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def fix_confirmation(ticket_number: int) -> InlineKeyboardMarkup:

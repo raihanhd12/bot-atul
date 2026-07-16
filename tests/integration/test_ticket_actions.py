@@ -40,6 +40,17 @@ def test_agent_assigns_and_resolves_ticket(
     assert repository.count_status_history(number) == 3
 
 
+def test_self_owned_mark_fixed_closes_without_confirm(
+    workflow: tuple[Repository, TicketWorkflow, int],
+) -> None:
+    repository, service, number = workflow
+    repository.assign_ticket(number, 10, 10)
+
+    service.change_status(number, 10, "start")
+    closed = service.mark_fixed(number, 10)
+    assert closed.status == "Closed"
+
+
 def test_owner_can_reject_fix(
     workflow: tuple[Repository, TicketWorkflow, int],
 ) -> None:
@@ -49,6 +60,17 @@ def test_owner_can_reject_fix(
     service.change_status(number, 20, "fix")
 
     assert service.confirm_fix(number, 10, fixed=False).status == "Open"
+
+
+def test_admin_can_close_fixed_ticket(
+    workflow: tuple[Repository, TicketWorkflow, int],
+) -> None:
+    _, service, number = workflow
+    service.assign_to_me(number, 20)
+    service.change_status(number, 20, "start")
+    service.change_status(number, 20, "fix")
+
+    assert service.change_status(number, 30, "close").status == "Closed"
 
 
 def test_permissions_and_invalid_transitions_are_rejected(

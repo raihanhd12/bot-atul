@@ -9,6 +9,7 @@ from bot_atul.domain.statuses import TicketStatus, transition
         (TicketStatus.OPEN, "start", TicketStatus.IN_PROGRESS),
         (TicketStatus.IN_PROGRESS, "fix", TicketStatus.FIXED),
         (TicketStatus.FIXED, "confirm", TicketStatus.CLOSED),
+        (TicketStatus.FIXED, "close", TicketStatus.CLOSED),
         (TicketStatus.FIXED, "reject", TicketStatus.OPEN),
         (TicketStatus.CLOSED, "reopen", TicketStatus.OPEN),
         (TicketStatus.FIXED, "reopen", TicketStatus.OPEN),

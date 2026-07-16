@@ -430,6 +430,19 @@ class Repository:
         ).fetchall()
         return [Ticket(**dict(row)) for row in rows]
 
+    def closable_tickets(self) -> list[Ticket]:
+        """Open, In Progress, and Fixed tickets an admin can close."""
+        rows = self.connection.execute(
+            """
+            SELECT number, reporter_id, service_name, urgency, title, description,
+                   status, topic_id, card_message_id, assignee_id
+            FROM tickets
+            WHERE status IN ('Open', 'In Progress', 'Fixed')
+            ORDER BY number
+            """
+        ).fetchall()
+        return [Ticket(**dict(row)) for row in rows]
+
     def record_message(
         self,
         *,
