@@ -97,6 +97,58 @@ async def render_dashboard_card(
     )
 
 
+async def publish_topic_attachment(
+    bot: Any,
+    repository: Repository,
+    team_group_id: int,
+    dashboard_topic_id: int,
+    ticket: Ticket,
+    attachment_id: int,
+    *,
+    replace_existing: bool = True,
+) -> bool:
+    """Post one attachment under the card (temporary preview).
+
+    By default replaces any current preview so only one file is visible —
+    keeps the closed issues topic clean and structured.
+    """
+    card_message_id = repository.get_dashboard_card(ticket.number)
+    if card_message_id is None:
+        return False
+    attachments = repository.list_attachments(ticket.number)
+    attachment = next((item for item in attachments if item.id == attachment_id), None)
+    if attachment is None:
+        return False
+    index = next(
+        (i for i, item in enumerate(attachments, start=1) if item.id == attachment_id),
+        1,
+    )
+    if replace_existing:
+        await hide_topic_attachments(bot, repository, team_group_id, ticket)
+    elif repository.is_topic_attachment_posted(attachment.id):
+        return True
+
+    label = attachment_label(attachment, index)
+    caption = f"#{ticket.number} · {label}"
+    if attachment.caption and attachment.caption not in caption:
+        caption = f"{caption}\n{attachment.caption}"
+    try:
+        message = await _send_attachment(
+            bot,
+            chat_id=team_group_id,
+            thread_id=dashboard_topic_id,
+            reply_to=card_message_id,
+            attachment=attachment,
+            caption=caption[:1_024],
+        )
+    except TelegramAPIError:
+        return False
+    repository.save_topic_attachment(
+        ticket.number, attachment.id, int(message.message_id)
+    )
+    return True
+
+
 async def publish_topic_attachments(
     bot: Any,
     repository: Repository,
@@ -104,35 +156,18 @@ async def publish_topic_attachments(
     dashboard_topic_id: int,
     ticket: Ticket,
 ) -> int:
-    """Post attachments under the card while details are open (temporary)."""
-    card_message_id = repository.get_dashboard_card(ticket.number)
-    if card_message_id is None:
-        return 0
-    posted = 0
-    attachments = repository.list_attachments(ticket.number)
-    for index, attachment in enumerate(attachments, start=1):
-        if repository.is_topic_attachment_posted(attachment.id):
-            continue
-        label = attachment_label(attachment, index)
-        caption = f"#{ticket.number} · {label}"
-        if attachment.caption and attachment.caption not in caption:
-            caption = f"{caption}\n{attachment.caption}"
-        try:
-            message = await _send_attachment(
-                bot,
-                chat_id=team_group_id,
-                thread_id=dashboard_topic_id,
-                reply_to=card_message_id,
-                attachment=attachment,
-                caption=caption[:1_024],
-            )
-        except TelegramAPIError:
-            continue
-        repository.save_topic_attachment(
-            ticket.number, attachment.id, int(message.message_id)
+    """Post every attachment without replacing (tests / bulk)."""
+    for attachment in repository.list_attachments(ticket.number):
+        await publish_topic_attachment(
+            bot,
+            repository,
+            team_group_id,
+            dashboard_topic_id,
+            ticket,
+            attachment.id,
+            replace_existing=False,
         )
-        posted += 1
-    return posted
+    return len(repository.list_topic_attachment_messages(ticket.number))
 
 
 async def hide_topic_attachments(

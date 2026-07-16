@@ -13,7 +13,7 @@ from bot_atul.services.topics import (
     create_ticket_card,
     deliver_pending_reporter_messages,
     hide_topic_attachments,
-    publish_topic_attachments,
+    publish_topic_attachment,
     render_dashboard_card,
     ticket_names,
 )
@@ -38,11 +38,26 @@ def build_ticket_router(
         bot = query.bot
         if bot is None:
             return
-        _, action, number_text = query.data.split(":", 2)
-        number = int(number_text)
+        parts = query.data.split(":")
+        action = parts[1] if len(parts) > 1 else ""
         actor_id = query.from_user.id
 
-        if action in {"detail", "summary", "files"}:
+        if action == "file" and len(parts) == 4:
+            number = int(parts[2])
+            attachment_id = int(parts[3])
+            await _open_topic_file(
+                query,
+                bot,
+                repository,
+                team_group_id,
+                dashboard_topic_id,
+                number,
+                attachment_id,
+            )
+            return
+
+        if action in {"detail", "summary", "clearfiles"} and len(parts) >= 3:
+            number = int(parts[2])
             await _toggle_topic_detail(
                 query,
                 bot,
@@ -51,9 +66,15 @@ def build_ticket_router(
                 dashboard_topic_id,
                 number,
                 detailed=action != "summary",
-                publish_files=action in {"detail", "files"},
+                clear_files=action in {"summary", "clearfiles"},
+                collapse=action == "summary",
             )
             return
+
+        if len(parts) < 3:
+            await query.answer("Unknown action.", show_alert=True)
+            return
+        number = int(parts[2])
 
         try:
             if action == "assign":
@@ -126,16 +147,14 @@ def build_ticket_router(
     return router
 
 
-async def _toggle_topic_detail(
+async def _open_topic_file(
     query: CallbackQuery,
     bot: Bot,
     repository: Repository,
     team_group_id: int,
     dashboard_topic_id: int,
     number: int,
-    *,
-    detailed: bool,
-    publish_files: bool = False,
+    attachment_id: int,
 ) -> None:
     if repository.get_role(query.from_user.id) not in {"agent", "admin"}:
         await query.answer("Team access required.", show_alert=True)
@@ -148,35 +167,77 @@ async def _toggle_topic_detail(
         await create_ticket_card(
             bot, repository, team_group_id, dashboard_topic_id, ticket
         )
+    # Keep details expanded while browsing files.
+    with suppress(TelegramAPIError):
+        await render_dashboard_card(
+            bot, repository, team_group_id, ticket, detailed=True
+        )
+    ok = await publish_topic_attachment(
+        bot,
+        repository,
+        team_group_id,
+        dashboard_topic_id,
+        ticket,
+        attachment_id,
+        replace_existing=True,
+    )
+    if ok:
+        await query.answer("File preview ready")
+    else:
+        await query.answer("Could not open that file.", show_alert=True)
+
+
+async def _toggle_topic_detail(
+    query: CallbackQuery,
+    bot: Bot,
+    repository: Repository,
+    team_group_id: int,
+    dashboard_topic_id: int,
+    number: int,
+    *,
+    detailed: bool,
+    clear_files: bool = False,
+    collapse: bool = False,
+) -> None:
+    if repository.get_role(query.from_user.id) not in {"agent", "admin"}:
+        await query.answer("Team access required.", show_alert=True)
+        return
+    ticket = repository.get_ticket(number)
+    if ticket is None:
+        await query.answer("Ticket not found.", show_alert=True)
+        return
+    if repository.get_dashboard_card(number) is None:
+        await create_ticket_card(
+            bot, repository, team_group_id, dashboard_topic_id, ticket
+        )
+
+    show_detailed = detailed and not collapse
     try:
         await render_dashboard_card(
-            bot, repository, team_group_id, ticket, detailed=detailed
+            bot, repository, team_group_id, ticket, detailed=show_detailed
         )
     except TelegramAPIError:
         await query.answer("Could not update the topic card.", show_alert=True)
         return
 
-    if not detailed:
-        # Hide Details: remove temporary file messages so the topic stays clean.
+    if clear_files:
         removed = await hide_topic_attachments(
             bot, repository, team_group_id, ticket
         )
-        if removed:
-            await query.answer(f"Hidden · removed {removed} file(s)")
+        if collapse:
+            await query.answer(
+                f"Hidden · cleared {removed} preview(s)" if removed else "Summary"
+            )
         else:
-            await query.answer("Summary")
+            await query.answer(
+                f"Cleared {removed} preview(s)" if removed else "No preview open"
+            )
         return
 
-    posted = 0
-    if publish_files:
-        posted = await publish_topic_attachments(
-            bot, repository, team_group_id, dashboard_topic_id, ticket
-        )
-    if publish_files and repository.count_attachments(number):
-        if posted:
-            await query.answer(f"Showing {posted} file(s)")
-        else:
-            await query.answer("Files already visible")
+    # View Details only expands the card + file buttons (no auto bulk dump).
+    count = repository.count_attachments(number)
+    if count:
+        await query.answer(f"Details · tap a file ({count})")
     else:
         await query.answer("Details")
 

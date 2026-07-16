@@ -10,6 +10,7 @@ from bot_atul.services.topics import (
     create_ticket_card,
     deliver_pending_reporter_messages,
     hide_topic_attachments,
+    publish_topic_attachment,
     publish_topic_attachments,
 )
 
@@ -132,7 +133,7 @@ async def test_assignment_workspace_and_pending_message_are_private(
 
 
 @pytest.mark.asyncio
-async def test_view_details_posts_and_hide_removes_topic_attachments(
+async def test_file_preview_is_one_at_a_time_and_hide_clears(
     repository: Repository,
 ) -> None:
     ticket = repository.create_ticket(
@@ -149,26 +150,27 @@ async def test_view_details_posts_and_hide_removes_topic_attachments(
     )
     bot = FakeBot()
     await create_ticket_card(bot, repository, -1001, 24, ticket)
+    files = repository.list_attachments(ticket.number)
 
-    posted = await publish_topic_attachments(bot, repository, -1001, 24, ticket)
-    assert posted == 3
-    assert len(bot.attachments) == 3
+    assert await publish_topic_attachment(
+        bot, repository, -1001, 24, ticket, files[0].id, replace_existing=True
+    )
+    assert len(bot.attachments) == 1
     assert bot.attachments[0]["photo"] == "photo-1"
-    assert bot.attachments[1]["photo"] == "photo-2"
-    assert bot.attachments[2]["document"] == "doc-1"
-    assert all(item["message_thread_id"] == 24 for item in bot.attachments)
-    assert all(item["reply_to_message_id"] == 1 for item in bot.attachments)
+    assert bot.attachments[0]["reply_to_message_id"] == 1
 
-    # While open, do not re-post the same files.
-    assert await publish_topic_attachments(bot, repository, -1001, 24, ticket) == 0
-    assert len(bot.attachments) == 3
+    # Opening another file replaces the previous preview (clean topic).
+    assert await publish_topic_attachment(
+        bot, repository, -1001, 24, ticket, files[2].id, replace_existing=True
+    )
+    assert len(bot.attachments) == 2
+    assert bot.attachments[1]["document"] == "doc-1"
+    assert len(bot.deletes) == 1
+    assert len(repository.list_topic_attachment_messages(ticket.number)) == 1
 
     removed = await hide_topic_attachments(bot, repository, -1001, ticket)
-    assert removed == 3
-    assert len(bot.deletes) == 3
+    assert removed == 1
     assert repository.list_topic_attachment_messages(ticket.number) == []
 
-    # View Details again re-posts files after hide.
-    posted_again = await publish_topic_attachments(bot, repository, -1001, 24, ticket)
-    assert posted_again == 3
-    assert len(bot.attachments) == 6
+    # Bulk helper still works when needed.
+    assert await publish_topic_attachments(bot, repository, -1001, 24, ticket) == 3

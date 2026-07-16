@@ -70,7 +70,7 @@ def test_ticket_card_detailed_includes_description_and_attachments() -> None:
     assert "📎 Attachments  2" in card
     assert "🖼️ screen" in card
     assert "📄 report.pdf" in card
-    assert "Hide Details removes them again" in card
+    assert "Tap a file button below" in card
 
 
 def test_summary_shows_attachment_count() -> None:

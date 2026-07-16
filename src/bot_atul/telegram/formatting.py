@@ -79,10 +79,8 @@ def ticket_card(
         if files:
             lines.extend(["", *format_attachment_lines(files)])
             lines.append("")
-            lines.append(
-                "Files appear below while details are open. "
-                "Hide Details removes them again."
-            )
+            lines.append("Tap a file button below to preview it under this card.")
+            lines.append("Hide Details or Clear preview removes previews.")
         else:
             lines.extend(["", "📎 Attachments  none"])
     return "\n".join(lines)

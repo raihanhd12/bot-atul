@@ -1,6 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot_atul.db.repositories import AttachmentRecord, Ticket
+from bot_atul.telegram.formatting import attachment_icon, attachment_label
 
 
 def choices(prefix: str, values: tuple[str, ...]) -> InlineKeyboardMarkup:
@@ -27,13 +28,20 @@ def review_actions() -> InlineKeyboardMarkup:
     )
 
 
+def _file_button_label(attachment: AttachmentRecord, index: int) -> str:
+    icon = attachment_icon(attachment.kind)
+    name = attachment_label(attachment, index)
+    label = f"{icon} {index}. {name}"
+    return label if len(label) <= 64 else label[:61] + "..."
+
+
 def dashboard_ticket_actions(
     ticket: Ticket,
     *,
     detailed: bool = False,
     attachments: list[AttachmentRecord] | None = None,
 ) -> InlineKeyboardMarkup:
-    """Topic cards are view-only: expand details and open attachments."""
+    """Topic cards are view-only: expand details and open one file at a time."""
     files = attachments or []
     rows: list[list[InlineKeyboardButton]] = []
     if detailed:
@@ -45,12 +53,33 @@ def dashboard_ticket_actions(
                 )
             ]
         )
+        # One button per file — tap to preview under the card (temporary).
+        for index, attachment in enumerate(files[:10], start=1):
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=_file_button_label(attachment, index),
+                        callback_data=(
+                            f"ticket:file:{ticket.number}:{attachment.id}"
+                        ),
+                    )
+                ]
+            )
+        if len(files) > 10:
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        text=f"… +{len(files) - 10} more in private workspace",
+                        callback_data=f"ticket:detail:{ticket.number}",
+                    )
+                ]
+            )
         if files:
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"📎 Show {len(files)} file(s)",
-                        callback_data=f"ticket:files:{ticket.number}",
+                        text="🧹 Clear preview",
+                        callback_data=f"ticket:clearfiles:{ticket.number}",
                     )
                 ]
             )
