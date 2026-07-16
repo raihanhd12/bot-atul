@@ -25,6 +25,7 @@ def test_ticket_round_trip_preserves_long_description(repository: Repository) ->
         urgency="High",
         title="Agent cannot start",
         description=description,
+        attachments=(("document", "file-1", "trace.txt", "log"),),
     )
 
     stored = repository.get_ticket(ticket.number)
@@ -32,6 +33,11 @@ def test_ticket_round_trip_preserves_long_description(repository: Repository) ->
     assert stored.description == description
     assert stored.service_name == "AI-Agents"
     assert stored.status == "Open"
+    attachment = repository.connection.execute(
+        "SELECT telegram_file_id, file_name FROM attachments WHERE ticket_number = ?",
+        (ticket.number,),
+    ).fetchone()
+    assert tuple(attachment) == ("file-1", "trace.txt")
 
 
 def test_processed_update_is_claimed_once(repository: Repository) -> None:
