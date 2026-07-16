@@ -13,6 +13,7 @@ def ticket(**changes: object) -> Ticket:
         "status": "Open",
         "topic_id": None,
         "card_message_id": None,
+        "assignee_id": None,
     }
     values.update(changes)
     return Ticket(**values)  # type: ignore[arg-type]

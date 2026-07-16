@@ -15,6 +15,7 @@ class Ticket:
     status: str
     topic_id: int | None
     card_message_id: int | None
+    assignee_id: int | None
 
 
 class Repository:
@@ -74,7 +75,7 @@ class Repository:
         row = self.connection.execute(
             """
             SELECT number, reporter_id, service_name, urgency, title,
-                   description, status, topic_id, card_message_id
+                   description, status, topic_id, card_message_id, assignee_id
             FROM tickets WHERE number = ?
             """,
             (number,),
@@ -215,5 +216,66 @@ class Repository:
     def count_audit_events(self, event_type: str) -> int:
         row = self.connection.execute(
             "SELECT COUNT(*) FROM audit_events WHERE event_type = ?", (event_type,)
+        ).fetchone()
+        return int(row[0])
+
+    def assign_ticket(self, number: int, agent_id: int, assigned_by: int) -> Ticket:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE tickets SET assignee_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE number = ?
+                """,
+                (agent_id, number),
+            )
+            self.connection.execute(
+                """
+                INSERT INTO assignments(ticket_number, agent_id, assigned_by)
+                VALUES (?, ?, ?)
+                """,
+                (number, agent_id, assigned_by),
+            )
+        ticket = self.get_ticket(number)
+        if ticket is None:
+            raise ValueError(f"Unknown ticket: {number}")
+        return ticket
+
+    def update_status(
+        self,
+        number: int,
+        expected_status: str,
+        new_status: str,
+        actor_id: int,
+        reason: str | None = None,
+    ) -> Ticket:
+        with self.connection:
+            cursor = self.connection.execute(
+                """
+                UPDATE tickets SET status = ?, updated_at = CURRENT_TIMESTAMP,
+                    fixed_at = CASE WHEN ? = 'Fixed'
+                        THEN CURRENT_TIMESTAMP ELSE fixed_at END,
+                    closed_at = CASE WHEN ? = 'Closed'
+                        THEN CURRENT_TIMESTAMP ELSE closed_at END
+                WHERE number = ? AND status = ?
+                """,
+                (new_status, new_status, new_status, number, expected_status),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("Ticket status changed; refresh and retry.")
+            self.connection.execute(
+                """
+                INSERT INTO status_history(
+                    ticket_number, previous_status, new_status, actor_id, reason
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                (number, expected_status, new_status, actor_id, reason),
+            )
+        ticket = self.get_ticket(number)
+        assert ticket is not None
+        return ticket
+
+    def count_status_history(self, number: int) -> int:
+        row = self.connection.execute(
+            "SELECT COUNT(*) FROM status_history WHERE ticket_number = ?", (number,)
         ).fetchone()
         return int(row[0])
