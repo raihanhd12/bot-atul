@@ -12,6 +12,7 @@ from bot_atul.telegram.keyboards import ticket_actions
 async def create_ticket_topic(
     bot: Any, repository: Repository, team_group_id: int, ticket: Ticket
 ) -> int:
+    ticket = repository.get_ticket(ticket.number) or ticket
     topic_id = ticket.topic_id
     if topic_id is None:
         topic = await bot.create_forum_topic(

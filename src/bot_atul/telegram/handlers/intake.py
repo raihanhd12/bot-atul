@@ -1,8 +1,10 @@
+import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
@@ -20,6 +22,7 @@ from bot_atul.telegram.keyboards import (
 
 URGENCIES = ("Low", "Normal", "High", "Critical")
 SESSIONS: dict[int, IntakeSession] = {}
+LOGGER = logging.getLogger(__name__)
 
 
 def begin_intake(repository: Repository, user_id: int) -> None:
@@ -130,8 +133,20 @@ def build_intake_router(
                 bot = query.bot
                 if bot is None:
                     return
-                ticket = session.confirm(repository)
-                await create_ticket_topic(bot, repository, team_group_id, ticket)
+                try:
+                    await bot.get_chat(team_group_id)
+                    ticket = session.confirm(repository)
+                    await create_ticket_topic(bot, repository, team_group_id, ticket)
+                except TelegramAPIError:
+                    LOGGER.exception(
+                        "Could not submit ticket to team group %s", team_group_id
+                    )
+                    await query.answer(
+                        "Cannot access the team forum. Check TEAM_GROUP_ID and "
+                        "the bot's forum admin permissions, then try Submit again.",
+                        show_alert=True,
+                    )
+                    return
                 await safe_publish_dashboard(
                     bot,
                     repository,
@@ -139,6 +154,7 @@ def build_intake_router(
                     dashboard_topic_id,
                     datetime.now(timezone),
                 )
+                session.complete()
                 SESSIONS.pop(query.from_user.id, None)
                 await _edit(
                     query,

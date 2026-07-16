@@ -33,6 +33,7 @@ class IntakeSession:
     urgency: str = ""
     description_parts: list[str] = field(default_factory=list)
     attachments: list[Attachment] = field(default_factory=list)
+    _ticket: Ticket | None = field(default=None, init=False, repr=False)
 
     @property
     def description(self) -> str:
@@ -92,19 +93,24 @@ class IntakeSession:
     def confirm(self, repository: Repository) -> Ticket:
         if self.step is not IntakeStep.REVIEW:
             raise ValueError("The intake is not ready for confirmation.")
-        ticket = repository.create_ticket(
-            reporter_id=self.reporter_id,
-            service_name=self.service,
-            urgency=self.urgency,
-            title=self.title,
-            description=self.description,
-            attachments=tuple(
-                (item.kind, item.file_id, item.file_name, item.caption)
-                for item in self.attachments
-            ),
-        )
+        if self._ticket is None:
+            self._ticket = repository.create_ticket(
+                reporter_id=self.reporter_id,
+                service_name=self.service,
+                urgency=self.urgency,
+                title=self.title,
+                description=self.description,
+                attachments=tuple(
+                    (item.kind, item.file_id, item.file_name, item.caption)
+                    for item in self.attachments
+                ),
+            )
+        return self._ticket
+
+    def complete(self) -> None:
+        if self.step is not IntakeStep.REVIEW or self._ticket is None:
+            raise ValueError("The intake is not ready for completion.")
         self.step = IntakeStep.COMPLETE
-        return ticket
 
     def cancel(self) -> None:
         self.step = IntakeStep.CANCELLED

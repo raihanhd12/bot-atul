@@ -60,6 +60,25 @@ def test_description_is_required() -> None:
         session.complete_description()
 
 
+def test_confirmation_can_retry_without_duplicate_ticket() -> None:
+    repository = Mock()
+    repository.create_ticket.return_value = Mock()
+    session = IntakeSession(reporter_id=10, services=("AI-ML",))
+    session.answer("Training failure")
+    session.answer("AI-ML")
+    session.answer("Critical")
+    session.answer("The job failed")
+    session.complete_description()
+    session.finish_attachments()
+
+    assert session.confirm(repository) is session.confirm(repository)
+    assert repository.create_ticket.call_count == 1
+    assert session.step is IntakeStep.REVIEW
+
+    session.complete()
+    assert session.step is IntakeStep.COMPLETE
+
+
 async def test_title_message_reaches_intake_handler() -> None:
     repository = Mock()
     repository.get_role.return_value = "reporter"

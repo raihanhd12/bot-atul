@@ -31,6 +31,14 @@ class FakeBot:
         return SimpleNamespace(message_id=100 + len(self.attachments))
 
 
+class RetryBot(FakeBot):
+    async def send_message(self, **kwargs: object) -> SimpleNamespace:
+        if not self.messages:
+            self.messages.append(kwargs)
+            raise RuntimeError("temporary failure")
+        return await super().send_message(**kwargs)
+
+
 @pytest.mark.asyncio
 async def test_topic_creation_is_idempotent() -> None:
     connection = sqlite3.connect(":memory:")
@@ -62,3 +70,27 @@ async def test_topic_creation_is_idempotent() -> None:
     assert bot.topics == 1
     assert len(bot.messages) == 4
     assert len(bot.attachments) == 1
+
+
+@pytest.mark.asyncio
+async def test_topic_retry_uses_topic_already_saved_in_repository() -> None:
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    migrate(connection)
+    repository = Repository(connection)
+    repository.upsert_user(10, "reporter")
+    ticket = repository.create_ticket(
+        reporter_id=10,
+        service_name="Technical",
+        urgency="High",
+        title="Agent cannot start",
+        description="Failed once",
+    )
+    bot = RetryBot()
+
+    with pytest.raises(RuntimeError, match="temporary"):
+        await create_ticket_topic(bot, repository, -1001, ticket)
+    await create_ticket_topic(bot, repository, -1001, ticket)
+
+    assert bot.topics == 1
