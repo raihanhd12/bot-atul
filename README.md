@@ -108,6 +108,14 @@ For local development without Docker:
    - team group ID;
    - dashboard topic ID;
    - initial admin Telegram user ID.
+8. Prefer keeping the issues topic **closed** so members cannot free-chat there.
+
+On startup the bot tries to **close** the configured dashboard topic. In a closed
+forum topic, normal members can still read and use buttons, but only admins and
+the bot can send messages. The bot still posts ticket cards and reminders.
+
+You can also close it manually in Telegram: open the topic → topic menu →
+**Close topic**. Do not reopen it unless you want free chat there.
 
 The bot cannot initiate a private conversation with a user who has never
 started it. Each agent or admin must open the bot and press **Start** first.

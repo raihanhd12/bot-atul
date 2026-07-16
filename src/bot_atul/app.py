@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher
+from aiogram.exceptions import TelegramAPIError
 
 from bot_atul.config import Config
 from bot_atul.db.connection import connect
@@ -17,6 +18,8 @@ from bot_atul.telegram.handlers.intake import build_intake_router
 from bot_atul.telegram.handlers.menu import build_menu_router
 from bot_atul.telegram.handlers.relay import build_relay_router
 from bot_atul.telegram.handlers.tickets import build_ticket_router
+
+LOGGER = logging.getLogger(__name__)
 
 
 async def dashboard_loop(bot: Bot, repository: Repository, config: Config) -> None:
@@ -43,6 +46,26 @@ async def reminder_loop(bot: Bot, repository: Repository, config: Config) -> Non
             repository,
             config.team_group_id,
             config.dashboard_topic_id,
+        )
+
+
+async def close_issues_topic(bot: Bot, team_group_id: int, topic_id: int) -> None:
+    """Keep the issues topic view-only for members.
+
+    Closed forum topics allow only admins (and the bot) to post. Members can
+    still read cards and press buttons, but cannot send free-form messages.
+    """
+    try:
+        await bot.close_forum_topic(
+            chat_id=team_group_id,
+            message_thread_id=topic_id,
+        )
+        LOGGER.info("Issues topic %s closed for member posts", topic_id)
+    except TelegramAPIError:
+        LOGGER.exception(
+            "Could not close issues topic %s. Give the bot Manage Topics and "
+            "close the topic manually in Telegram if needed.",
+            topic_id,
         )
 
 
@@ -91,6 +114,9 @@ async def run() -> None:
     reminder_task = asyncio.create_task(reminder_loop(bot, repository, config))
     try:
         await register_commands(bot, config.admin_ids)
+        await close_issues_topic(
+            bot, config.team_group_id, config.dashboard_topic_id
+        )
         await dispatcher.start_polling(bot)
     finally:
         dashboard_task.cancel()
