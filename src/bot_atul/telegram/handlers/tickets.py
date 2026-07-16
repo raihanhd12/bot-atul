@@ -12,6 +12,7 @@ from bot_atul.services.topics import (
     create_agent_workspace,
     create_ticket_card,
     deliver_pending_reporter_messages,
+    hide_topic_attachments,
     publish_topic_attachments,
     render_dashboard_card,
     ticket_names,
@@ -154,6 +155,18 @@ async def _toggle_topic_detail(
     except TelegramAPIError:
         await query.answer("Could not update the topic card.", show_alert=True)
         return
+
+    if not detailed:
+        # Hide Details: remove temporary file messages so the topic stays clean.
+        removed = await hide_topic_attachments(
+            bot, repository, team_group_id, ticket
+        )
+        if removed:
+            await query.answer(f"Hidden · removed {removed} file(s)")
+        else:
+            await query.answer("Summary")
+        return
+
     posted = 0
     if publish_files:
         posted = await publish_topic_attachments(
@@ -161,11 +174,11 @@ async def _toggle_topic_detail(
         )
     if publish_files and repository.count_attachments(number):
         if posted:
-            await query.answer(f"Posted {posted} file(s) in the topic")
+            await query.answer(f"Showing {posted} file(s)")
         else:
-            await query.answer("Attachments already in the topic")
+            await query.answer("Files already visible")
     else:
-        await query.answer("Details" if detailed else "Summary")
+        await query.answer("Details")
 
 
 async def _refresh_ticket(

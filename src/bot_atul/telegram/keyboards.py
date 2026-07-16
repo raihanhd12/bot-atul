@@ -49,7 +49,7 @@ def dashboard_ticket_actions(
             rows.append(
                 [
                     InlineKeyboardButton(
-                        text=f"📎 Show {len(files)} file(s) in topic",
+                        text=f"📎 Show {len(files)} file(s)",
                         callback_data=f"ticket:files:{ticket.number}",
                     )
                 ]

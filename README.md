@@ -298,8 +298,9 @@ Each ticket appears as a polished view-only card in the shared dashboard topic:
 - display names and `@username` instead of raw Telegram IDs;
 - **View Details / Hide Details** so the whole team can expand the description
   in the topic;
-- multiple attachments (photos, PDFs, documents) posted under the card when
-  details are opened, so the team can open files in the issues topic.
+- multiple attachments (photos, PDFs, documents) shown under the card while
+  **View Details** is open; **Hide Details** deletes those file messages again
+  so the topic stays clean.
 
 No assign or close buttons appear in the group.
 

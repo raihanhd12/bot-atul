@@ -114,7 +114,7 @@ def test_dashboard_cards_are_view_only_with_details_toggle() -> None:
     assert open_labels == ["📄 View Details"]
     assert closed_labels == ["📄 View Details"]
     assert detailed_labels == ["▲ Hide Details"]
-    assert "Show 1 file(s) in topic" in " ".join(with_files)
+    assert "Show 1 file(s)" in " ".join(with_files)
     assert "Assign" not in " ".join(open_labels)
     assert "Close" not in " ".join(open_labels)
 

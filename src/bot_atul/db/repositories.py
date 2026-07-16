@@ -235,6 +235,28 @@ class Repository:
                 (attachment_id, ticket_number, message_id),
             )
 
+    def list_topic_attachment_messages(
+        self, ticket_number: int
+    ) -> list[tuple[int, int]]:
+        """Return (attachment_id, message_id) rows posted in the issues topic."""
+        rows = self.connection.execute(
+            """
+            SELECT attachment_id, message_id
+            FROM ticket_topic_attachments
+            WHERE ticket_number = ?
+            ORDER BY attachment_id
+            """,
+            (ticket_number,),
+        ).fetchall()
+        return [(int(row[0]), int(row[1])) for row in rows]
+
+    def clear_topic_attachments(self, ticket_number: int) -> None:
+        with self.connection:
+            self.connection.execute(
+                "DELETE FROM ticket_topic_attachments WHERE ticket_number = ?",
+                (ticket_number,),
+            )
+
     def count_tickets(self) -> int:
         row = self.connection.execute("SELECT COUNT(*) FROM tickets").fetchone()
         return int(row[0])

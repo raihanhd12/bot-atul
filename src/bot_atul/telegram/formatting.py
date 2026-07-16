@@ -79,7 +79,10 @@ def ticket_card(
         if files:
             lines.extend(["", *format_attachment_lines(files)])
             lines.append("")
-            lines.append("Files are posted below this card in the topic.")
+            lines.append(
+                "Files appear below while details are open. "
+                "Hide Details removes them again."
+            )
         else:
             lines.extend(["", "📎 Attachments  none"])
     return "\n".join(lines)

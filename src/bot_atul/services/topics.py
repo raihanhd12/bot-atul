@@ -104,7 +104,7 @@ async def publish_topic_attachments(
     dashboard_topic_id: int,
     ticket: Ticket,
 ) -> int:
-    """Post each attachment under the topic card once (photos, PDFs, docs)."""
+    """Post attachments under the card while details are open (temporary)."""
     card_message_id = repository.get_dashboard_card(ticket.number)
     if card_message_id is None:
         return 0
@@ -133,6 +133,28 @@ async def publish_topic_attachments(
         )
         posted += 1
     return posted
+
+
+async def hide_topic_attachments(
+    bot: Any,
+    repository: Repository,
+    team_group_id: int,
+    ticket: Ticket,
+) -> int:
+    """Delete temporary attachment messages so the topic stays clean."""
+    posted = repository.list_topic_attachment_messages(ticket.number)
+    if not posted:
+        return 0
+    removed = 0
+    for _attachment_id, message_id in posted:
+        try:
+            await bot.delete_message(chat_id=team_group_id, message_id=message_id)
+            removed += 1
+        except TelegramAPIError:
+            # Still drop the tracking row so a later View can re-post cleanly.
+            continue
+    repository.clear_topic_attachments(ticket.number)
+    return removed
 
 
 async def _send_attachment(

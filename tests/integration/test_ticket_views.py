@@ -9,6 +9,8 @@ from bot_atul.services.topics import (
     create_agent_workspace,
     create_ticket_card,
     deliver_pending_reporter_messages,
+    hide_topic_attachments,
+    publish_topic_attachments,
 )
 
 
@@ -18,6 +20,8 @@ class FakeBot:
         self.copies: list[dict[str, object]] = []
         self.attachments: list[dict[str, object]] = []
         self.edits: list[dict[str, object]] = []
+        self.deletes: list[dict[str, object]] = []
+        self._next_attachment_id = 200
 
     async def send_message(self, **kwargs: object) -> SimpleNamespace:
         self.messages.append(kwargs)
@@ -29,11 +33,17 @@ class FakeBot:
 
     async def send_document(self, **kwargs: object) -> SimpleNamespace:
         self.attachments.append(kwargs)
-        return SimpleNamespace(message_id=200 + len(self.attachments))
+        self._next_attachment_id += 1
+        return SimpleNamespace(message_id=self._next_attachment_id)
 
     async def send_photo(self, **kwargs: object) -> SimpleNamespace:
         self.attachments.append(kwargs)
-        return SimpleNamespace(message_id=200 + len(self.attachments))
+        self._next_attachment_id += 1
+        return SimpleNamespace(message_id=self._next_attachment_id)
+
+    async def delete_message(self, **kwargs: object) -> bool:
+        self.deletes.append(kwargs)
+        return True
 
     async def get_chat(self, chat_id: int) -> SimpleNamespace:
         return SimpleNamespace(
@@ -122,11 +132,9 @@ async def test_assignment_workspace_and_pending_message_are_private(
 
 
 @pytest.mark.asyncio
-async def test_view_details_posts_multiple_attachments_in_topic(
+async def test_view_details_posts_and_hide_removes_topic_attachments(
     repository: Repository,
 ) -> None:
-    from bot_atul.services.topics import publish_topic_attachments
-
     ticket = repository.create_ticket(
         reporter_id=10,
         service_name="Technical",
@@ -151,6 +159,16 @@ async def test_view_details_posts_multiple_attachments_in_topic(
     assert all(item["message_thread_id"] == 24 for item in bot.attachments)
     assert all(item["reply_to_message_id"] == 1 for item in bot.attachments)
 
-    # Second open does not spam duplicates.
+    # While open, do not re-post the same files.
     assert await publish_topic_attachments(bot, repository, -1001, 24, ticket) == 0
     assert len(bot.attachments) == 3
+
+    removed = await hide_topic_attachments(bot, repository, -1001, ticket)
+    assert removed == 3
+    assert len(bot.deletes) == 3
+    assert repository.list_topic_attachment_messages(ticket.number) == []
+
+    # View Details again re-posts files after hide.
+    posted_again = await publish_topic_attachments(bot, repository, -1001, 24, ticket)
+    assert posted_again == 3
+    assert len(bot.attachments) == 6
