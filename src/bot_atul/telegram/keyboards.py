@@ -72,9 +72,18 @@ def fix_confirmation(ticket_number: int) -> InlineKeyboardMarkup:
 
 
 def reporter_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
-    if ticket.status != "Open" or ticket.assignee_id is not None:
-        return None
-    return action("Cancel Ticket", f"ticket:cancel:{ticket.number}")
+    rows = []
+    if ticket.status == "Open" and ticket.assignee_id is None:
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text="Cancel Ticket",
+                    callback_data=f"ticket:cancel:{ticket.number}",
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text="← Dashboard", callback_data="menu:home")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def retry_delivery(message_id: int) -> InlineKeyboardMarkup:

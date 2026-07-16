@@ -23,6 +23,7 @@ dashboard, and exports issue data to Excel.
 - Admin-only `.xlsx` export with date filtering
 - Durable failed-message records and retry buttons
 - Role-aware interactive menu and automatic slash-command registration
+- Configurable weekday reminder for unresolved tickets
 
 ## Ticket Workflow
 
@@ -120,6 +121,7 @@ TEAM_GROUP_ID=-1001234567890
 DASHBOARD_TOPIC_ID=1
 ADMIN_IDS=123456789
 TIMEZONE=Asia/Jakarta
+REMINDER_TIME=09:00
 DATA_DIR=/app/data
 BACKUP_DIR=/app/backups
 ```
@@ -131,6 +133,9 @@ ADMIN_IDS=123456789,987654321
 ```
 
 Never commit `.env`. It is ignored by Git.
+
+`REMINDER_TIME` accepts one local 24-hour time. The bot sends a reminder
+Monday through Friday only when Open or In Progress tickets exist.
 
 ## Docker Deployment
 
@@ -215,18 +220,31 @@ Examples:
 Service changes affect new intake choices. Existing tickets retain the service
 label recorded when they were submitted.
 
-## Interactive Menu
+## Interactive Dashboard
 
-Send `/start` in the bot's private chat to open a persistent menu.
+Send `/start` in the bot's private chat to open a role-aware dashboard. The bot
+edits that message as the user navigates, so most actions are button-driven.
 
-All approved roles can:
+All approved users see:
 
-- report a new issue;
-- view their active tickets;
-- open help.
+- Report Issue
+- My Tickets
+- Help
 
-Agents and admins also receive team instructions. Admins additionally receive
-Excel export and administration help buttons.
+Agents and admins also see Team Help. Admins additionally see Export Excel and
+the Admin Panel.
+
+The Admin Panel shows:
+
+- the active service list in its current order;
+- current admins and agents;
+- current reporters;
+- the configured weekday reminder time;
+- shortcuts for service and user management commands.
+
+Telegram IDs and new category names still require typing because they are input
+values, but the available actions and current configuration are discoverable
+from the buttons.
 
 Roles are hierarchical:
 

@@ -32,6 +32,14 @@ class RelayMessage:
     delivery_status: str
 
 
+@dataclass(frozen=True)
+class UserRecord:
+    telegram_id: int
+    role: str
+    username: str | None
+    display_name: str | None
+
+
 class Repository:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self.connection = connection
@@ -167,6 +175,32 @@ class Repository:
             (telegram_id,),
         ).fetchone()
         return str(row[0]) if row else None
+
+    def remember_user(
+        self, telegram_id: int, username: str | None, display_name: str
+    ) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE users SET username = ?, display_name = ?
+                WHERE telegram_id = ?
+                """,
+                (username, display_name, telegram_id),
+            )
+
+    def list_users(self, roles: tuple[str, ...]) -> list[UserRecord]:
+        placeholders = ",".join("?" for _ in roles)
+        rows = self.connection.execute(
+            f"""
+            SELECT telegram_id, role, username, display_name
+            FROM users
+            WHERE enabled = 1 AND role IN ({placeholders})
+            ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'agent' THEN 2 ELSE 3 END,
+                     COALESCE(display_name, username, telegram_id)
+            """,
+            roles,
+        ).fetchall()
+        return [UserRecord(**dict(row)) for row in rows]
 
     def list_services(self) -> list[str]:
         rows = self.connection.execute(

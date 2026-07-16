@@ -2,7 +2,7 @@ from bot_atul.telegram.menu import main_menu, welcome_text
 
 
 def labels(role: str) -> list[str]:
-    return [button.text for row in main_menu(role).keyboard for button in row]
+    return [button.text for row in main_menu(role).inline_keyboard for button in row]
 
 
 def test_reporter_menu() -> None:
@@ -25,6 +25,6 @@ def test_admin_menu_includes_admin_actions() -> None:
         "❓ Help",
         "👥 Team Help",
         "📤 Export Excel",
-        "⚙️ Admin Help",
+        "⚙️ Admin Panel",
     ]
     assert "admin" in welcome_text("admin").lower()

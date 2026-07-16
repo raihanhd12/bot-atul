@@ -9,6 +9,7 @@ from aiogram.types import (
 )
 
 from bot_atul.db.repositories import Repository, Ticket
+from bot_atul.domain.permissions import Action, Role, allowed
 from bot_atul.services.relay import RelayService
 from bot_atul.telegram.keyboards import retry_delivery
 
@@ -20,10 +21,10 @@ def build_relay_router(repository: Repository, team_group_id: int) -> Router:
 
     @router.message(F.chat.type == "private")
     async def reporter_message(message: Message) -> None:
-        if (
-            message.from_user is None
-            or repository.get_role(message.from_user.id) != "reporter"
-        ):
+        if message.from_user is None:
+            raise SkipHandler
+        role = repository.get_role(message.from_user.id)
+        if not allowed(Role(role) if role else None, Action.SUBMIT):
             raise SkipHandler
         bot = message.bot
         if bot is None:

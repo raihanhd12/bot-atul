@@ -1,4 +1,5 @@
 from bot_atul.db.repositories import Repository, Ticket
+from bot_atul.domain.permissions import Action, Role, allowed
 
 
 class RelayService:
@@ -6,7 +7,8 @@ class RelayService:
         self.repository = repository
 
     def active_for_reporter(self, reporter_id: int) -> list[Ticket]:
-        if self.repository.get_role(reporter_id) != "reporter":
+        role = self.repository.get_role(reporter_id)
+        if not allowed(Role(role) if role else None, Action.SUBMIT):
             raise PermissionError("Reporter access required.")
         return self.repository.active_tickets(reporter_id)
 

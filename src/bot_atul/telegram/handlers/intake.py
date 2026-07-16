@@ -17,9 +17,16 @@ from bot_atul.telegram.keyboards import (
     reporter_ticket_actions,
     review_actions,
 )
-from bot_atul.telegram.menu import REPORT
 
 URGENCIES = ("Low", "Normal", "High", "Critical")
+SESSIONS: dict[int, IntakeSession] = {}
+
+
+def begin_intake(repository: Repository, user_id: int) -> None:
+    role = repository.get_role(user_id)
+    if not allowed(Role(role) if role else None, Action.SUBMIT):
+        raise PermissionError("You are not approved to submit issues.")
+    SESSIONS[user_id] = IntakeSession(user_id, tuple(repository.list_services()))
 
 
 def build_intake_router(
@@ -29,26 +36,23 @@ def build_intake_router(
     timezone: ZoneInfo,
 ) -> Router:
     router = Router(name="intake")
-    sessions: dict[int, IntakeSession] = {}
 
-    @router.message((Command("new") | (F.text == REPORT)) & (F.chat.type == "private"))
+    @router.message(Command("new") & (F.chat.type == "private"))
     async def start(message: Message) -> None:
         if message.from_user is None:
             return
-        role = repository.get_role(message.from_user.id)
-        if not allowed(Role(role) if role else None, Action.SUBMIT):
-            await message.answer("You are not approved to submit issues.")
+        try:
+            begin_intake(repository, message.from_user.id)
+        except PermissionError as error:
+            await message.answer(str(error))
             return
-        sessions[message.from_user.id] = IntakeSession(
-            message.from_user.id, tuple(repository.list_services())
-        )
         await message.answer("What is the short issue title?")
 
     @router.message(F.chat.type == "private")
     async def receive(message: Message) -> None:
         if message.from_user is None:
             return
-        session = sessions.get(message.from_user.id)
+        session = SESSIONS.get(message.from_user.id)
         if session is None:
             raise SkipHandler
         if session.step in {IntakeStep.TITLE, IntakeStep.DESCRIPTION} and message.text:
@@ -96,7 +100,7 @@ def build_intake_router(
     async def callback(query: CallbackQuery) -> None:
         if query.from_user is None or query.data is None:
             return
-        session = sessions.get(query.from_user.id)
+        session = SESSIONS.get(query.from_user.id)
         if session is None:
             await query.answer("Start again with /new.", show_alert=True)
             return
@@ -135,7 +139,7 @@ def build_intake_router(
                     dashboard_topic_id,
                     datetime.now(timezone),
                 )
-                sessions.pop(query.from_user.id, None)
+                SESSIONS.pop(query.from_user.id, None)
                 await _edit(
                     query,
                     f"Ticket #{ticket.number} submitted successfully.",
@@ -143,7 +147,7 @@ def build_intake_router(
                 )
             elif data == "intake:cancel":
                 session.cancel()
-                sessions.pop(query.from_user.id, None)
+                SESSIONS.pop(query.from_user.id, None)
                 await _edit(query, "Issue report cancelled.")
             await query.answer()
         except ValueError as error:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import time
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -14,6 +15,7 @@ class Config:
     dashboard_topic_id: int
     admin_ids: frozenset[int]
     timezone: ZoneInfo
+    reminder_time: time
     data_dir: Path
     backup_dir: Path
 
@@ -25,6 +27,7 @@ class Config:
             "DASHBOARD_TOPIC_ID",
             "ADMIN_IDS",
             "TIMEZONE",
+            "REMINDER_TIME",
             "DATA_DIR",
             "BACKUP_DIR",
         )
@@ -36,6 +39,12 @@ class Config:
             timezone = ZoneInfo(values["TIMEZONE"])
         except ZoneInfoNotFoundError as error:
             raise ValueError(f"Invalid TIMEZONE: {values['TIMEZONE']}") from error
+        try:
+            reminder_time = time.fromisoformat(values["REMINDER_TIME"])
+        except ValueError as error:
+            raise ValueError(
+                f"Invalid REMINDER_TIME: {values['REMINDER_TIME']}"
+            ) from error
 
         try:
             return cls(
@@ -46,6 +55,7 @@ class Config:
                     int(value.strip()) for value in values["ADMIN_IDS"].split(",")
                 ),
                 timezone=timezone,
+                reminder_time=reminder_time,
                 data_dir=Path(values["DATA_DIR"]),
                 backup_dir=Path(values["BACKUP_DIR"]),
             )

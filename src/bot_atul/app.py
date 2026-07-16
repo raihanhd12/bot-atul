@@ -9,6 +9,7 @@ from bot_atul.db.connection import connect
 from bot_atul.db.migrations import migrate
 from bot_atul.db.repositories import Repository
 from bot_atul.services.dashboard import next_dashboard_run, safe_publish_dashboard
+from bot_atul.services.reminders import next_reminder_run, safe_send_reminder
 from bot_atul.telegram.commands import register_commands
 from bot_atul.telegram.handlers.admin import build_admin_router
 from bot_atul.telegram.handlers.dashboard import build_dashboard_router
@@ -32,6 +33,19 @@ async def dashboard_loop(bot: Bot, repository: Repository, config: Config) -> No
         )
 
 
+async def reminder_loop(bot: Bot, repository: Repository, config: Config) -> None:
+    while True:
+        now = datetime.now(config.timezone)
+        run_at = next_reminder_run(now, config.timezone, config.reminder_time)
+        await asyncio.sleep((run_at - now).total_seconds())
+        await safe_send_reminder(
+            bot,
+            repository,
+            config.team_group_id,
+            config.dashboard_topic_id,
+        )
+
+
 async def run() -> None:
     config = Config.from_env()
     config.data_dir.mkdir(parents=True, exist_ok=True)
@@ -45,7 +59,7 @@ async def run() -> None:
 
     bot = Bot(config.bot_token)
     dispatcher = Dispatcher()
-    dispatcher.include_router(build_menu_router(repository))
+    dispatcher.include_router(build_menu_router(repository, config.reminder_time))
     dispatcher.include_router(build_admin_router(repository))
     dispatcher.include_router(
         build_intake_router(
@@ -74,11 +88,13 @@ async def run() -> None:
         )
     )
     dashboard_task = asyncio.create_task(dashboard_loop(bot, repository, config))
+    reminder_task = asyncio.create_task(reminder_loop(bot, repository, config))
     try:
         await register_commands(bot, config.admin_ids)
         await dispatcher.start_polling(bot)
     finally:
         dashboard_task.cancel()
+        reminder_task.cancel()
         await bot.session.close()
         connection.close()
 
