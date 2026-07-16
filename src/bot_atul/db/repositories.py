@@ -279,3 +279,74 @@ class Repository:
             "SELECT COUNT(*) FROM status_history WHERE ticket_number = ?", (number,)
         ).fetchone()
         return int(row[0])
+
+    def active_tickets(self, reporter_id: int) -> list[Ticket]:
+        rows = self.connection.execute(
+            """
+            SELECT number, reporter_id, service_name, urgency, title, description,
+                   status, topic_id, card_message_id, assignee_id
+            FROM tickets
+            WHERE reporter_id = ? AND status != 'Closed'
+            ORDER BY number
+            """,
+            (reporter_id,),
+        ).fetchall()
+        return [Ticket(**dict(row)) for row in rows]
+
+    def ticket_by_topic(self, topic_id: int) -> Ticket | None:
+        row = self.connection.execute(
+            """
+            SELECT number, reporter_id, service_name, urgency, title, description,
+                   status, topic_id, card_message_id, assignee_id
+            FROM tickets WHERE topic_id = ?
+            """,
+            (topic_id,),
+        ).fetchone()
+        return Ticket(**dict(row)) if row else None
+
+    def record_message(
+        self,
+        *,
+        ticket_number: int,
+        direction: str,
+        source_chat_id: int,
+        source_message_id: int,
+        destination_chat_id: int | None,
+        destination_message_id: int | None,
+        text: str | None,
+        delivery_status: str,
+    ) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                INSERT OR IGNORE INTO ticket_messages(
+                    ticket_number, direction, source_chat_id, source_message_id,
+                    destination_chat_id, destination_message_id, text, delivery_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    ticket_number,
+                    direction,
+                    source_chat_id,
+                    source_message_id,
+                    destination_chat_id,
+                    destination_message_id,
+                    text,
+                    delivery_status,
+                ),
+            )
+
+    def ticket_for_team_message(self, destination_message_id: int) -> Ticket | None:
+        row = self.connection.execute(
+            """
+            SELECT t.number, t.reporter_id, t.service_name, t.urgency, t.title,
+                   t.description, t.status, t.topic_id, t.card_message_id,
+                   t.assignee_id
+            FROM ticket_messages m
+            JOIN tickets t ON t.number = m.ticket_number
+            WHERE m.direction = 'reporter_to_team'
+              AND m.destination_message_id = ?
+            """,
+            (destination_message_id,),
+        ).fetchone()
+        return Ticket(**dict(row)) if row else None

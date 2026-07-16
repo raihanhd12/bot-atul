@@ -1,4 +1,5 @@
 from aiogram import F, Router
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
@@ -32,7 +33,7 @@ def build_intake_router(repository: Repository, team_group_id: int) -> Router:
             return
         session = sessions.get(message.from_user.id)
         if session is None:
-            return
+            raise SkipHandler
         if session.step in {IntakeStep.TITLE, IntakeStep.DESCRIPTION} and message.text:
             try:
                 session.answer(message.text)
