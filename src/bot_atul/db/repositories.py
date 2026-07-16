@@ -13,6 +13,8 @@ class Ticket:
     title: str
     description: str
     status: str
+    topic_id: int | None
+    card_message_id: int | None
 
 
 class Repository:
@@ -72,12 +74,32 @@ class Repository:
         row = self.connection.execute(
             """
             SELECT number, reporter_id, service_name, urgency, title,
-                   description, status
+                   description, status, topic_id, card_message_id
             FROM tickets WHERE number = ?
             """,
             (number,),
         ).fetchone()
         return Ticket(**dict(row)) if row else None
+
+    def attach_topic(self, number: int, topic_id: int) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE tickets SET topic_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE number = ? AND topic_id IS NULL
+                """,
+                (topic_id, number),
+            )
+
+    def attach_card(self, number: int, card_message_id: int) -> None:
+        with self.connection:
+            self.connection.execute(
+                """
+                UPDATE tickets SET card_message_id = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE number = ?
+                """,
+                (card_message_id, number),
+            )
 
     def count_tickets(self) -> int:
         row = self.connection.execute("SELECT COUNT(*) FROM tickets").fetchone()
