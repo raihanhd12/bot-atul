@@ -1,9 +1,13 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from aiogram import F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from bot_atul.db.repositories import Repository
+from bot_atul.services.dashboard import safe_publish_dashboard
 from bot_atul.services.tickets import IntakeSession, IntakeStep
 from bot_atul.services.topics import create_ticket_topic
 from bot_atul.telegram.keyboards import (
@@ -16,7 +20,12 @@ from bot_atul.telegram.keyboards import (
 URGENCIES = ("Low", "Normal", "High", "Critical")
 
 
-def build_intake_router(repository: Repository, team_group_id: int) -> Router:
+def build_intake_router(
+    repository: Repository,
+    team_group_id: int,
+    dashboard_topic_id: int,
+    timezone: ZoneInfo,
+) -> Router:
     router = Router(name="intake")
     sessions: dict[int, IntakeSession] = {}
 
@@ -111,8 +120,18 @@ def build_intake_router(repository: Repository, team_group_id: int) -> Router:
                 session.finish_attachments()
                 await _edit(query, session.summary(), review_actions())
             elif data == "intake:confirm":
+                bot = query.bot
+                if bot is None:
+                    return
                 ticket = session.confirm(repository)
-                await create_ticket_topic(query.bot, repository, team_group_id, ticket)
+                await create_ticket_topic(bot, repository, team_group_id, ticket)
+                await safe_publish_dashboard(
+                    bot,
+                    repository,
+                    team_group_id,
+                    dashboard_topic_id,
+                    datetime.now(timezone),
+                )
                 sessions.pop(query.from_user.id, None)
                 await _edit(
                     query,

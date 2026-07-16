@@ -1,13 +1,22 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from aiogram import Bot, F, Router
 from aiogram.types import CallbackQuery
 
 from bot_atul.db.repositories import Repository, Ticket
+from bot_atul.services.dashboard import safe_publish_dashboard
 from bot_atul.services.workflow import TicketWorkflow
 from bot_atul.telegram.formatting import ticket_card, topic_title
 from bot_atul.telegram.keyboards import fix_confirmation, ticket_actions
 
 
-def build_ticket_router(repository: Repository, team_group_id: int) -> Router:
+def build_ticket_router(
+    repository: Repository,
+    team_group_id: int,
+    dashboard_topic_id: int,
+    timezone: ZoneInfo,
+) -> Router:
     router = Router(name="tickets")
     workflow = TicketWorkflow(repository)
 
@@ -36,6 +45,13 @@ def build_ticket_router(repository: Repository, team_group_id: int) -> Router:
             return
 
         await _refresh_ticket(bot, repository, team_group_id, ticket)
+        await safe_publish_dashboard(
+            bot,
+            repository,
+            team_group_id,
+            dashboard_topic_id,
+            datetime.now(timezone),
+        )
         if action == "fix":
             await bot.send_message(
                 ticket.reporter_id,

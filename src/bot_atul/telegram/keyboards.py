@@ -79,3 +79,18 @@ def reporter_ticket_actions(ticket: Ticket) -> InlineKeyboardMarkup | None:
 
 def retry_delivery(message_id: int) -> InlineKeyboardMarkup:
     return action("Retry Delivery", f"relay:retry:{message_id}")
+
+
+def dashboard_actions() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Refresh List", callback_data="dashboard:refresh"
+                ),
+                InlineKeyboardButton(
+                    text="Export Excel", callback_data="dashboard:export"
+                ),
+            ]
+        ]
+    )
