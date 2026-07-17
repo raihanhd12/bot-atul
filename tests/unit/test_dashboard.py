@@ -176,3 +176,51 @@ async def test_publish_creates_cards_for_existing_active_tickets() -> None:
 
     assert repository.get_dashboard_card(ticket.number) == 1
     assert bot.messages[0]["message_thread_id"] == 24
+
+
+@pytest.mark.asyncio
+async def test_refresh_rewrites_team_pulse_message_when_pressed() -> None:
+    """Refresh on the morning team pulse must rewrite that message to the live list.
+
+    Previously only dashboard_posts digests were edited, so pressing Refresh List
+    on "⏰ Team issue reminder · 1 still open" looked broken after tickets closed.
+    """
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    migrate(connection)
+    repository = Repository(connection)
+    repository.upsert_user(10, "agent")
+    # No open tickets → digest should show "0 need attention".
+
+    class FakeBot:
+        def __init__(self) -> None:
+            self.edits: list[dict[str, object]] = []
+            self.sent = 0
+
+        async def send_message(self, **_: object) -> SimpleNamespace:
+            self.sent += 1
+            return SimpleNamespace(message_id=100 + self.sent)
+
+        async def edit_message_text(self, **kwargs: object) -> None:
+            self.edits.append(kwargs)
+
+    bot = FakeBot()
+    now = datetime(2026, 7, 17, 10, tzinfo=ZoneInfo("Asia/Jakarta"))
+    # First publish creates today's digest post (message_id 101).
+    await publish_dashboard(bot, repository, -1001, 24, now)  # type: ignore[arg-type]
+    assert bot.sent == 1
+
+    # Admin presses Refresh on the separate team-reminder pulse (message 999).
+    await publish_dashboard(  # type: ignore[arg-type]
+        bot,
+        repository,
+        -1001,
+        24,
+        now,
+        also_update_message_id=999,
+    )
+
+    pulse_edits = [edit for edit in bot.edits if edit.get("message_id") == 999]
+    assert len(pulse_edits) == 1
+    assert "0 need attention" in str(pulse_edits[0]["text"])
+    assert "Issue Check" in str(pulse_edits[0]["text"])

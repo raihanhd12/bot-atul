@@ -96,13 +96,48 @@ def next_dashboard_run(now: datetime, timezone: ZoneInfo) -> datetime:
     return candidate
 
 
+async def _edit_message_if_changed(
+    bot: Bot,
+    *,
+    chat_id: int,
+    message_id: int,
+    text: str,
+    reply_markup: object | None = None,
+) -> bool:
+    """Edit a message; ignore Telegram's 'not modified' rejection.
+
+    Returns True when Telegram accepted a content change.
+    """
+    try:
+        await bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=text,
+            reply_markup=reply_markup,
+        )
+        return True
+    except TelegramAPIError as error:
+        if "message is not modified" in str(error).lower():
+            return False
+        raise
+
+
 async def publish_dashboard(
     bot: Bot,
     repository: Repository,
     team_group_id: int,
     dashboard_topic_id: int,
     now: datetime,
+    *,
+    also_update_message_id: int | None = None,
 ) -> int:
+    """Publish/refresh today's Issue Check digest.
+
+    If ``also_update_message_id`` is set (e.g. the team reminder pulse the admin
+    pressed Refresh on), that message is rewritten to page 1 of the live digest
+    so the list they are looking at actually updates — not only the stored
+    daily digest post.
+    """
     for ticket in repository.actionable_tickets():
         await create_ticket_card(
             bot,
@@ -125,17 +160,13 @@ async def publish_dashboard(
         markup = dashboard_actions() if page == 1 else None
         if page in existing:
             message_id = existing[page]
-            try:
-                await bot.edit_message_text(
-                    chat_id=team_group_id,
-                    message_id=message_id,
-                    text=text,
-                    reply_markup=markup,
-                )
-            except TelegramAPIError as error:
-                # Telegram rejects identical content; treat as already up to date.
-                if "message is not modified" not in str(error).lower():
-                    raise
+            await _edit_message_if_changed(
+                bot,
+                chat_id=team_group_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=markup,
+            )
         else:
             message = await bot.send_message(
                 chat_id=team_group_id,
@@ -161,6 +192,17 @@ async def publish_dashboard(
                     "DELETE FROM dashboard_posts WHERE digest_date = ? AND page = ?",
                     (digest_date, page),
                 )
+
+    # Refresh was often pressed on the morning team pulse, which is NOT the
+    # stored digest post — rewrite that message so the open list clears.
+    if also_update_message_id is not None and also_update_message_id not in message_ids:
+        await _edit_message_if_changed(
+            bot,
+            chat_id=team_group_id,
+            message_id=also_update_message_id,
+            text=pages[0],
+            reply_markup=dashboard_actions(),
+        )
     return message_ids[0]
 
 

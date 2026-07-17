@@ -61,7 +61,11 @@ async def close_issues_topic(bot: Bot, team_group_id: int, topic_id: int) -> Non
             message_thread_id=topic_id,
         )
         LOGGER.info("Issues topic %s closed for member posts", topic_id)
-    except TelegramAPIError:
+    except TelegramAPIError as error:
+        # Already closed from a previous boot — not an error.
+        if "topic_not_modified" in str(error).lower():
+            LOGGER.info("Issues topic %s already closed", topic_id)
+            return
         LOGGER.exception(
             "Could not close issues topic %s. Give the bot Manage Topics and "
             "close the topic manually in Telegram if needed.",

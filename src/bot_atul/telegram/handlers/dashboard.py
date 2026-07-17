@@ -58,12 +58,19 @@ def build_dashboard_router(
         if query.data == "dashboard:refresh":
             # Answer first so Telegram stops the loading spinner immediately.
             await query.answer("Refreshing…")
+            # Also rewrite the message that was pressed (digest OR team pulse).
+            pressed_id = (
+                query.message.message_id
+                if isinstance(query.message, Message)
+                else None
+            )
             await publish_dashboard(
                 bot,
                 repository,
                 team_group_id,
                 dashboard_topic_id,
                 datetime.now(timezone),
+                also_update_message_id=pressed_id,
             )
         else:
             await query.answer("Excel sent in DM.")
