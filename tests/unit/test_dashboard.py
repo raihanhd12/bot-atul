@@ -107,6 +107,46 @@ async def test_publish_edits_same_daily_post() -> None:
 
 
 @pytest.mark.asyncio
+async def test_publish_tolerates_message_not_modified() -> None:
+    """Telegram rejects identical edit content; refresh must not crash."""
+    from unittest.mock import MagicMock
+
+    from aiogram.exceptions import TelegramBadRequest
+
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    migrate(connection)
+    repository = Repository(connection)
+
+    class FakeBot:
+        def __init__(self) -> None:
+            self.sent = 0
+
+        async def send_message(self, **_: object) -> SimpleNamespace:
+            self.sent += 1
+            return SimpleNamespace(message_id=77)
+
+        async def edit_message_text(self, **_: object) -> None:
+            raise TelegramBadRequest(
+                method=MagicMock(),
+                message=(
+                    "Bad Request: message is not modified: specified new "
+                    "message content and reply markup are exactly the same "
+                    "as a current content and reply markup of the message"
+                ),
+            )
+
+    bot = FakeBot()
+    now = datetime(2026, 7, 20, 9, tzinfo=ZoneInfo("Asia/Jakarta"))
+
+    await publish_dashboard(bot, repository, -1001, 9, now)  # type: ignore[arg-type]
+    # Second publish edits same text → Telegram "not modified" must be ignored.
+    await publish_dashboard(bot, repository, -1001, 9, now)  # type: ignore[arg-type]
+
+    assert bot.sent == 1
+
+
+@pytest.mark.asyncio
 async def test_publish_creates_cards_for_existing_active_tickets() -> None:
     connection = sqlite3.connect(":memory:")
     connection.row_factory = sqlite3.Row

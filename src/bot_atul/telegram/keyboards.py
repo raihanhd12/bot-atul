@@ -229,3 +229,18 @@ def reminder_actions() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🏠 Menu", callback_data="menu:home")],
         ]
     )
+
+
+def quiet_checkin_actions() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Yes, report", callback_data="checkin:report"
+                ),
+                InlineKeyboardButton(
+                    text="All good", callback_data="checkin:ok"
+                ),
+            ]
+        ]
+    )

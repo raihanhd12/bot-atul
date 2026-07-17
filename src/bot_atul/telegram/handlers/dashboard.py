@@ -56,6 +56,8 @@ def build_dashboard_router(
         if bot is None or query.data is None:
             return
         if query.data == "dashboard:refresh":
+            # Answer first so Telegram stops the loading spinner immediately.
+            await query.answer("Refreshing…")
             await publish_dashboard(
                 bot,
                 repository,
@@ -63,8 +65,8 @@ def build_dashboard_router(
                 dashboard_topic_id,
                 datetime.now(timezone),
             )
-            await query.answer("Dashboard refreshed.")
         else:
+            await query.answer("Excel sent in DM.")
             await _send_export(
                 bot,
                 query.from_user.id,
@@ -75,7 +77,6 @@ def build_dashboard_router(
                 None,
                 None,
             )
-            await query.answer("Excel sent in DM.")
 
     return router
 

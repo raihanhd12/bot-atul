@@ -104,6 +104,34 @@ def build_menu_router(repository: Repository, reminder_time: time) -> Router:
             await _edit(query, f"👥 Team Help\n\n{TEAM_HELP_TEXT}", back_button())
         await query.answer()
 
+    @router.callback_query(F.data.startswith("checkin:"))
+    async def checkin_callback(query: CallbackQuery) -> None:
+        """Quiet-day morning check-in: report or dismiss."""
+        if query.data is None:
+            return
+        role = repository.get_role(query.from_user.id)
+        if role is None:
+            await query.answer("You are not approved.", show_alert=True)
+            return
+        action = query.data.removeprefix("checkin:")
+        if action == "report":
+            try:
+                begin_intake(repository, query.from_user.id)
+            except PermissionError as error:
+                await query.answer(str(error), show_alert=True)
+                return
+            await query.answer()
+            await _edit(query, "What is the short issue title?")
+        elif action == "ok":
+            await query.answer("Glad you're good 🙌")
+            await _edit(
+                query,
+                f"Hi — all good noted. Have a smooth day.\n\n"
+                f"(Check-in closed)",
+            )
+        else:
+            await query.answer()
+
     @router.callback_query(F.data.startswith("admin:"))
     async def admin_callback(query: CallbackQuery) -> None:
         if query.data is None:
@@ -152,10 +180,11 @@ def build_menu_router(repository: Repository, reminder_time: time) -> Router:
                 query,
                 "⏰ Reminder Schedule\n\n"
                 f"Monday–Friday at {reminder_time.strftime('%H:%M')}.\n\n"
-                "When open issues exist, the bot:\n"
-                "• DMs each person with their own tickets "
-                '(e.g. "Hi Raihan, you still have open issues…")\n'
-                "• Posts a short team summary in the issues topic\n\n"
+                "Every enabled agent/admin gets a private DM:\n"
+                "• Open tickets → personal work reminder\n"
+                "• Nothing open → soft check-in "
+                '("any issue today?" → Yes, report / All good)\n'
+                "• Team topic gets a short pulse (work summary or all clear)\n\n"
                 "Change REMINDER_TIME in .env and restart the bot to update it.",
                 back_button("admin:home"),
             )

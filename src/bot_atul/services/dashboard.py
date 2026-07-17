@@ -125,12 +125,17 @@ async def publish_dashboard(
         markup = dashboard_actions() if page == 1 else None
         if page in existing:
             message_id = existing[page]
-            await bot.edit_message_text(
-                chat_id=team_group_id,
-                message_id=message_id,
-                text=text,
-                reply_markup=markup,
-            )
+            try:
+                await bot.edit_message_text(
+                    chat_id=team_group_id,
+                    message_id=message_id,
+                    text=text,
+                    reply_markup=markup,
+                )
+            except TelegramAPIError as error:
+                # Telegram rejects identical content; treat as already up to date.
+                if "message is not modified" not in str(error).lower():
+                    raise
         else:
             message = await bot.send_message(
                 chat_id=team_group_id,

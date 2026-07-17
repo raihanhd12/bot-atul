@@ -9,7 +9,11 @@ from aiogram.exceptions import TelegramAPIError
 
 from bot_atul.db.repositories import Repository
 from bot_atul.telegram.formatting import STATUS_ICONS, URGENCY_ICONS
-from bot_atul.telegram.keyboards import dashboard_actions, reminder_actions
+from bot_atul.telegram.keyboards import (
+    dashboard_actions,
+    quiet_checkin_actions,
+    reminder_actions,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -25,9 +29,15 @@ class OpenTicketLine:
 
 @dataclass(frozen=True)
 class PersonReminder:
+    """Weekday touch for one teammate — work list or quiet check-in."""
+
     user_id: int
     greeting_name: str
     tickets: tuple[OpenTicketLine, ...]
+
+    @property
+    def is_quiet(self) -> bool:
+        return not self.tickets
 
 
 def next_reminder_run(
@@ -54,7 +64,10 @@ def _greeting_name(repository: Repository, user_id: int) -> str:
     return "there"
 
 
-def list_person_reminders(repository: Repository) -> list[PersonReminder]:
+def _open_tickets_by_owner(
+    repository: Repository,
+) -> dict[int, list[OpenTicketLine]]:
+    """Map owner_id → open tickets (assignee, else reporter)."""
     rows = repository.connection.execute(
         """
         SELECT COALESCE(assignee_id, reporter_id) AS owner_id,
@@ -67,8 +80,7 @@ def list_person_reminders(repository: Repository) -> list[PersonReminder]:
     ).fetchall()
     grouped: dict[int, list[OpenTicketLine]] = defaultdict(list)
     for row in rows:
-        owner_id = int(row["owner_id"])
-        grouped[owner_id].append(
+        grouped[int(row["owner_id"])].append(
             OpenTicketLine(
                 number=int(row["number"]),
                 title=str(row["title"]),
@@ -77,12 +89,19 @@ def list_person_reminders(repository: Repository) -> list[PersonReminder]:
                 age_days=int(row["age_days"] or 0),
             )
         )
+    return grouped
+
+
+def list_person_reminders(repository: Repository) -> list[PersonReminder]:
+    """Every enabled agent/admin — with their tickets or a quiet check-in."""
+    open_by_owner = _open_tickets_by_owner(repository)
     reminders: list[PersonReminder] = []
-    for user_id, tickets in grouped.items():
+    for user in repository.list_users(("admin", "agent")):
+        tickets = open_by_owner.get(user.telegram_id, [])
         reminders.append(
             PersonReminder(
-                user_id=user_id,
-                greeting_name=_greeting_name(repository, user_id),
+                user_id=user.telegram_id,
+                greeting_name=_greeting_name(repository, user.telegram_id),
                 tickets=tuple(tickets),
             )
         )
@@ -90,6 +109,8 @@ def list_person_reminders(repository: Repository) -> list[PersonReminder]:
 
 
 def build_personal_reminder(person: PersonReminder) -> str:
+    if person.is_quiet:
+        return build_quiet_checkin(person)
     open_count = sum(1 for ticket in person.tickets if ticket.status == "Open")
     progress_count = len(person.tickets) - open_count
     lines = [
@@ -118,20 +139,43 @@ def build_personal_reminder(person: PersonReminder) -> str:
     return "\n".join(lines)
 
 
+def build_quiet_checkin(person: PersonReminder) -> str:
+    return "\n".join(
+        [
+            f"Hi {person.greeting_name} 👋",
+            "",
+            "Nothing open on your plate right now…",
+            "Any issue today? 😔",
+            "",
+            "Tap below if something’s blocking you, or if you’re all good.",
+        ]
+    )
+
+
 def build_team_reminder(repository: Repository) -> str | None:
     people = list_person_reminders(repository)
     if not people:
         return None
-    total = sum(len(person.tickets) for person in people)
+
+    work = [person for person in people if not person.is_quiet]
+    quiet = [person for person in people if person.is_quiet]
+    total = sum(len(person.tickets) for person in work)
     open_count = sum(
-        1
-        for person in people
-        for ticket in person.tickets
-        if ticket.status == "Open"
+        1 for person in work for ticket in person.tickets if ticket.status == "Open"
     )
     progress_count = total - open_count
+
+    if total == 0:
+        lines = [
+            "☀️ Team check-in",
+            "────────────────",
+            "0 still open · all clear",
+            f"Quiet check-ins sent: {len(quiet)}",
+        ]
+        return "\n".join(lines)
+
     oldest = max(
-        (ticket.age_days for person in people for ticket in person.tickets),
+        (ticket.age_days for person in work for ticket in person.tickets),
         default=0,
     )
     lines = [
@@ -142,15 +186,17 @@ def build_team_reminder(repository: Repository) -> str | None:
         "",
         "People with open issues:",
     ]
-    for person in people:
+    for person in work:
         label = repository.user_label(person.user_id)
         lines.append(f"• {label} — {len(person.tickets)} ticket(s)")
     lines.extend(
         [
             "",
-            "Personal reminders were also sent in private chat.",
+            "Personal work reminders were sent in private chat.",
         ]
     )
+    if quiet:
+        lines.append(f"Quiet check-ins also sent to {len(quiet)} teammate(s).")
     return "\n".join(lines)
 
 
@@ -171,11 +217,12 @@ async def send_reminder(
 
     for person in people:
         text = build_personal_reminder(person)
+        markup = quiet_checkin_actions() if person.is_quiet else reminder_actions()
         try:
             await bot.send_message(
                 chat_id=person.user_id,
                 text=text,
-                reply_markup=reminder_actions(),
+                reply_markup=markup,
             )
         except TelegramAPIError:
             LOGGER.exception(
